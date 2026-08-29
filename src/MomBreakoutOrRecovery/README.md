@@ -1,8 +1,10 @@
-# Momentum Continuation
+# Momentum Edge
 
 ## Nifty 500 Short-Term Positional Stock Ranking Engine
 
-**Momentum Continuation** is a Python-based technical-analysis and stock-ranking engine designed to identify high-quality short-term positional trading setups from the current **Nifty 500 universe**.
+**Momentum Edge** is a Python-based technical-analysis and stock-ranking engine designed to identify high-quality short-term positional trading setups from the current **Nifty 500 universe**.
+
+Established Uptrend AND (20-Day Breakout OR Controlled Retracement Recovery) : Momentum Edge — Uptrend + (Breakout OR Recovery)
 
 The system focuses on stocks that are already in an established bullish trend and identifies one of two continuation setups:
 
