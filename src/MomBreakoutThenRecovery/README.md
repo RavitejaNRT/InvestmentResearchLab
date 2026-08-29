@@ -4,6 +4,18 @@
 
 Momentum Continuation (MC) is a Python-based research and decision-support system designed to identify and rank **Nifty 500 stocks showing a strong bullish momentum continuation structure**.
 
+Established Uptrend AND (20-Day Breakout followed by Controlled Retracement Recovery) : Momentum Continuation — Uptrend + Breakout → Retracement → Recovery
+
+```text
+ESTABLISHED UPTREND
+        AND
+(
+    20-DAY BREAKOUT
+        FOLLOWED BY
+    CONTROLLED RETRACEMENT RECOVERY
+)
+```
+
 The strategy is intentionally designed around **one setup**, not separate breakout and retracement strategies.
 
 ### Core Setup
