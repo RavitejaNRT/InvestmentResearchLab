@@ -1,636 +1,729 @@
-# FundamentalAlphaForge
-
-# Project Documentation
+# FundamentalAlphaForge — Project Documentation
 
 ## 1. Project Overview
 
-**FundamentalAlphaForge** is a quantitative equity research engine designed to systematically analyze the Nifty 500 universe using market and fundamental information.
+FundamentalAlphaForge is a quantitative equity research engine designed to analyse the Nifty 500 universe through a systematic combination of market and fundamental factors.
 
-The current implementation represents the:
+The system currently operates as a **current-research engine** rather than a historical backtesting engine.
 
-> **Market Data + Fundamental Research Layer**
+Its purpose is to establish a robust research foundation before introducing point-in-time historical fundamentals and portfolio backtesting.
 
-The engine combines:
-
-* Historical market data
-* Market factor calculations
-* Momentum analysis
-* Trend analysis
-* Risk analysis
-* Current fundamental information
-* Quality analysis
-* Growth analysis
-* Valuation analysis
-* Fundamental data completeness
-* Fundamental confidence
-* Combined research scoring
-* Equity rankings
-* Research candidate identification
-* Excel reporting
-* Excel dashboard visualization
-* Runtime monitoring
-
-The project is currently designed for **current equity research**, not historical fundamental backtesting.
-
----
-
-# 2. Current System Scope
-
-The current system performs the following major operations:
+The current architecture combines:
 
 ```text
-1. Refresh Nifty 500 universe
-2. Load universe
-3. Download 2 years of market data
-4. Calculate market metrics
-5. Apply market data-quality filter
-6. Calculate Momentum Score
-7. Calculate Trend Score
-8. Calculate Risk Score
-9. Calculate Market Research Score
-10. Download current fundamental data
-11. Merge market and fundamental data
-12. Calculate fundamental data quality
-13. Calculate Quality Score
-14. Calculate Growth Score
-15. Calculate Valuation Score
-16. Calculate Fundamental Score
-17. Calculate Combined Research Score
-18. Generate rankings and diagnostics
-19. Generate Excel workbook
-20. Display final runtime
+Market Research
++
+Fundamental Research
++
+Data Quality
++
+Confidence Measurement
++
+Cross-Sectional Ranking
++
+Excel Reporting
 ```
 
 ---
 
-# 3. High-Level Architecture
+# 2. Current Research Objective
 
-The current architecture can be represented as:
+The current objective is to answer:
+
+> Which Nifty 500 stocks currently exhibit a strong combination of market characteristics, fundamental characteristics and sufficiently complete fundamental data?
+
+The system does not attempt to predict an exact future price.
+
+Instead, it creates a structured ranking based on predefined factor models.
+
+---
+
+# 3. End-to-End Architecture
+
+The current pipeline is:
 
 ```text
-                     NIFTY 500
-                         │
-                         ▼
-               Universe Refresh
-                         │
-                         ▼
-                  universe.py
-                         │
-                         ▼
-               Historical Market Data
-                         │
-                         ▼
-              Market Metric Calculation
-                         │
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-      Momentum         Trend           Risk
-          │              │              │
-          └──────────────┼──────────────┘
-                         ▼
-              Market Research Score
-                         │
-                         ▼
-              Current Fundamental Data
-                         │
-                         ▼
-              Fundamental Data Quality
-                         │
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-       Quality         Growth        Valuation
-          │              │              │
-          └──────────────┼──────────────┘
-                         ▼
-                 Fundamental Score
-                         │
-                         ▼
-              Combined Research Score
-                         │
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-       Rankings      Candidates      Diagnostics
-                         │
-                         ▼
-                 Excel Research File
-                         │
-          ┌──────────────┼──────────────┐
-          ▼              ▼              ▼
-      Dashboard       Coverage      Statistics
+Nifty 500 Universe
+        │
+        ▼
+Universe Refresh
+        │
+        ▼
+Historical Market Data
+        │
+        ▼
+Market Metrics
+        │
+        ▼
+Market Data Quality Filter
+        │
+        ├───────────────┐
+        ▼               │
+Momentum Score         │
+        │               │
+        ▼               │
+Trend Score            │
+        │               │
+        ▼               │
+Risk Score             │
+        │               │
+        ▼               │
+Market Research Score  │
+        │               │
+        └───────────────┘
+                │
+                ▼
+        Fundamental Data
+                │
+                ▼
+      Fundamental Data Quality
+                │
+        ┌───────┼────────┐
+        ▼       ▼        ▼
+     Quality  Growth  Valuation
+        │       │        │
+        └───────┼────────┘
+                ▼
+        Fundamental Score
+                │
+                ▼
+        Confidence Classification
+                │
+                ▼
+       Combined Research Score
+                │
+                ▼
+        Rankings & Diagnostics
+                │
+                ▼
+          Excel Dashboard
 ```
 
 ---
 
-# 4. Module Responsibilities
+# 4. Main Execution Sequence
 
-## 4.1 `main.py`
+`main.py` currently executes the research process in 28 logical stages.
 
-The main research module contains the end-to-end research pipeline.
-
-Responsibilities include:
-
-* Configuration
-* Universe loading
-* Market calculations
-* Fundamental calculations
-* Scoring
-* Ranking
-* Diagnostics
-* Excel generation
-* Runtime tracking
-* Program entry point
-
----
-
-## 4.2 `trade_data.py`
-
-The market-data layer provides functionality used by the main research engine to:
-
-* Refresh the Nifty 500 universe
-* Retrieve historical market data for symbols
-
-The main engine consumes the resulting market dataset and performs the research calculations.
-
----
-
-## 4.3 `universe.py`
-
-The generated universe file contains the Nifty 500 symbol list used by the research engine.
-
-The main application dynamically imports this file and expects a list named:
+## Step 1 — Universe
 
 ```python
-symbols
+symbols = refresh_and_load_universe()
 ```
 
-The symbols are:
-
-* stripped
-* converted to uppercase
-* deduplicated
-* sorted
-
-The application requires at least 400 symbols to consider the universe valid.
+The current Nifty 500 universe is refreshed and loaded.
 
 ---
 
-# 5. Configuration
+## Step 2 — Market Data
 
-## 5.1 Market Configuration
+Historical market data is requested for the universe.
 
-```python
-HISTORICAL_PERIOD = "2y"
+Current historical period:
 
-MIN_PRICE = 100.0
-MIN_TRADING_DAYS = 200
-
-MOMENTUM_3M_DAYS = 63
-MOMENTUM_6M_DAYS = 126
-MOMENTUM_12M_DAYS = 252
-
-SHORT_MA = 50
-LONG_MA = 200
-
-VOLATILITY_DAYS = 63
-AVERAGE_VOLUME_DAYS = 20
+```text
+2 years
 ```
 
-The two-year historical window provides sufficient data for the 200-day moving average and 12-month momentum calculations.
+The engine reports:
+
+* Requested symbols
+* Valid symbols
+* Invalid symbols
+
+The market-data download output is suppressed during the underlying call so the main console remains readable.
 
 ---
 
-# 6. Market Metric Calculation
+## Step 3 — Market Metrics
 
-For every usable stock, the engine calculates the following.
+The raw market dataset is transformed into the research dataframe.
 
-## 6.1 Current Price
+The market dataframe contains the calculated price, return, moving-average, 52-week, volatility, drawdown and volume metrics.
 
-The latest available close price is used.
+---
 
-Stocks with prices below:
+## Step 4 — Data Quality
+
+The engine removes stocks that fail required market-data conditions.
+
+Current minimum price:
 
 ```text
 ₹100
 ```
 
-are removed by the data-quality filter.
-
----
-
-## 6.2 Returns
-
-Returns are calculated for:
+The engine also requires valid:
 
 ```text
-3 months  → 63 trading days
-6 months  → 126 trading days
-12 months → 252 trading days
-```
-
-The calculation compares the latest price against the appropriate historical price.
-
-Returns are stored as percentages.
-
----
-
-# 7. Moving Averages
-
-The engine calculates:
-
-```text
+Price
+Data Points
 50 DMA
 200 DMA
 ```
 
-and relative measures:
-
-```text
-Price vs 50 DMA
-Price vs 200 DMA
-50 DMA vs 200 DMA
-```
-
-These measures are used both for market scoring and trend classification.
+and positive moving averages.
 
 ---
 
-# 8. 52-Week Analysis
+## Step 5 — Momentum
 
-The latest available 252 trading observations, or the available history if shorter, are used to determine:
-
-* 52-week high
-* 52-week low
-* Distance from 52-week high
-* Distance from 52-week low
-
-52-week high proximity contributes to the Momentum Score.
+The engine calculates the Momentum Score.
 
 ---
 
-# 9. Volatility
+## Step 6 — Trend
 
-Daily percentage returns are calculated.
+The engine calculates the Trend Score.
 
-The latest:
+---
+
+## Step 7 — Risk
+
+The engine calculates the Risk Score.
+
+---
+
+## Step 8 — Market Research Score
+
+The three market components are combined:
 
 ```text
-63 trading days
-```
-
-are used for volatility estimation, provided sufficient observations exist.
-
-Annualized volatility is calculated using:
-
-```text
-Standard deviation of daily returns
-× √252
-× 100
+50% Momentum
+30% Trend
+20% Risk
 ```
 
 ---
 
-# 10. Maximum Drawdown
+## Step 9 — Fundamentals
 
-Maximum drawdown is calculated using the running historical peak:
+The fundamental research layer retrieves currently available fundamental data.
+
+Primary source:
 
 ```text
-Drawdown = Current Price / Running Peak - 1
+Dalal / BSE
 ```
 
-The minimum drawdown over the available history represents the stock's maximum drawdown.
+Supplementary source:
 
-It is stored as a percentage.
+```text
+yfinance
+```
 
 ---
 
-# 11. Volume Metrics
+## Step 10 — Merge
+
+Market and fundamental datasets are merged using:
+
+```text
+symbol
+```
+
+as the joining key.
+
+---
+
+## Step 11 — Fundamental Data Quality
 
 The engine calculates:
 
-* Current volume
-* Average 20-day volume
-* Current volume / average volume ratio
-
-These metrics are retained in the research dataset.
-
----
-
-# 12. Market Data Quality Filter
-
-Before market scoring, the engine requires:
-
-```text
-Symbol available
-Price available
-Data points available
-50 DMA available
-200 DMA available
-Price >= ₹100
-50 DMA > 0
-200 DMA > 0
-```
-
-Stocks failing these requirements are removed.
-
-This prevents invalid or incomplete market records from entering the scoring process.
+* Available factor count
+* Simple completeness
+* Quality completeness
+* Growth completeness
+* Valuation completeness
+* Weighted completeness
+* Fundamental confidence
+* Ranking eligibility
 
 ---
 
-# 13. Percentile Scoring Framework
+## Step 12 — Availability
 
-The market and fundamental factors use percentile-based relative scoring.
-
-The general process is:
-
-```text
-Raw factor
-    ↓
-Rank within research universe
-    ↓
-Percentile
-    ↓
-0–100 score
-```
-
-For factors where higher values are better:
-
-```text
-Higher percentile = higher score
-```
-
-For factors where lower values are better:
-
-```text
-100 - percentile
-```
-
-This creates comparable factor scores across fundamentally different units.
+Fundamental coverage is displayed factor by factor.
 
 ---
 
-# 14. Weighted Score Framework
+## Step 13 — Quality
 
-The weighted scoring engine uses only available factor values.
+Quality Score is calculated.
+
+---
+
+## Step 14 — Growth
+
+Growth Score is calculated.
+
+---
+
+## Step 15 — Valuation
+
+Valuation Score is calculated.
+
+---
+
+## Step 16 — Fundamental Score
+
+Quality, Growth and Valuation are combined.
+
+---
+
+## Step 17 — Combined Score
+
+Eligible market and fundamental scores are combined.
+
+---
+
+## Step 18 — Universe Summary
+
+The engine displays overall universe statistics.
+
+---
+
+## Step 19 — Market Rankings
+
+Market Research Score rankings are displayed.
+
+---
+
+## Step 20 — Fundamental Rankings
+
+Eligible fundamental rankings are displayed.
+
+---
+
+## Step 21 — Combined Rankings
+
+Final research rankings are displayed.
+
+---
+
+## Step 22 — Detailed Research
+
+The highest-ranked stocks are displayed with detailed market and fundamental information.
+
+---
+
+## Step 23 — Factor Leaders
+
+Individual factor leaders are displayed.
+
+---
+
+## Step 24 — Research Candidates
+
+The stricter candidate filter is applied.
+
+---
+
+## Step 25 — Score Distribution
+
+Score statistics are displayed.
+
+---
+
+## Step 26 — Runtime
+
+The research runtime is captured.
+
+---
+
+## Step 27 — Excel Output
+
+The Excel workbook is generated.
+
+---
+
+## Step 28 — Final Output
+
+Research notes, final summary and runtime are printed.
+
+---
+
+# 5. Configuration Parameters
+
+The current engine uses the following major market-data parameters.
+
+| Parameter             |    Current Value |
+| --------------------- | ---------------: |
+| Historical Period     |               2y |
+| Minimum Price         |             ₹100 |
+| Minimum Trading Days  |              200 |
+| Momentum 3M           |  63 trading days |
+| Momentum 6M           | 126 trading days |
+| Momentum 12M          | 252 trading days |
+| Short Moving Average  |          50 days |
+| Long Moving Average   |         200 days |
+| Volatility Window     |          63 days |
+| Average Volume Window |          20 days |
+
+---
+
+# 6. Fundamental Configuration
+
+Current fundamental collection settings include:
+
+| Parameter              |     Value |
+| ---------------------- | --------: |
+| Request sleep          |  0.10 sec |
+| Progress interval      | 25 stocks |
+| BSE lookup timeout     |    15 sec |
+| Maximum BSE candidates |         8 |
+| Retry count            |         3 |
+| Retry sleep            |     1 sec |
+
+These settings are intended to balance data collection reliability and runtime.
+
+---
+
+# 7. Fundamental Factor Model
+
+The model contains 11 fundamental factors.
+
+## Quality Factors
+
+```text
+ROE
+Profit Margin
+Operating Margin
+```
+
+## Growth Factors
+
+```text
+QoQ Revenue Growth
+QoQ Net Profit Growth
+QoQ EPS Growth
+YoY Revenue Growth
+YoY Net Profit Growth
+YoY EPS Growth
+```
+
+## Valuation Factors
+
+```text
+P/E
+P/B
+```
+
+---
+
+# 8. Quality Model
+
+Weights:
+
+```text
+ROE                  = 40%
+Profit Margin        = 30%
+Operating Margin     = 30%
+```
+
+Formula:
+
+```text
+Quality Score
+=
+0.40 × ROE Score
++
+0.30 × Profit Margin Score
++
+0.30 × Operating Margin Score
+```
+
+The underlying factor values are converted to cross-sectional percentile scores before weighting.
+
+---
+
+# 9. Growth Model
+
+The growth model is intentionally divided into two time horizons.
+
+## QoQ
+
+```text
+Revenue      = 40%
+Net Profit   = 35%
+EPS          = 25%
+```
+
+## YoY
+
+```text
+Revenue      = 40%
+Net Profit   = 35%
+EPS          = 25%
+```
+
+The subgroup weighting is:
+
+```text
+QoQ = 40%
+YoY = 60%
+```
 
 Conceptually:
 
 ```text
-Weighted Score =
-Σ(Factor Score × Factor Weight)
-/
-Σ(Available Factor Weights)
+Growth Score
+=
+0.40 × QoQ Growth Score
++
+0.60 × YoY Growth Score
 ```
 
-Therefore missing factor values do not automatically become zero.
-
-This is an important design feature of the current model.
+This structure gives more importance to sustained annual growth while retaining sensitivity to recent quarter-to-quarter changes.
 
 ---
 
-# 15. Market Scoring
+# 10. Valuation Model
 
-## 15.1 Momentum
-
-Momentum consists of:
-
-```text
-3M Return                 20%
-6M Return                 20%
-12M Return                20%
-Price vs 50 DMA           10%
-Price vs 200 DMA          10%
-50 DMA vs 200 DMA         10%
-52-Week High Proximity    10%
-```
-
-Total:
-
-```text
-100%
-```
-
----
-
-## 15.2 Trend
-
-Trend consists of:
-
-```text
-Price > 50 DMA
-Price > 200 DMA
-50 DMA > 200 DMA
-```
-
-Each satisfied condition contributes to the Trend Score.
-
----
-
-## 15.3 Risk
-
-Risk uses:
-
-```text
-Volatility       50%
-Maximum Drawdown 50%
-```
-
-Lower volatility is preferred.
-
-A less-negative maximum drawdown is preferred.
-
----
-
-## 15.4 Market Research Score
-
-```text
-Momentum       50%
-Trend          30%
-Risk           20%
-```
-
-The result is stored as:
-
-```text
-market_research_score
-```
-
----
-
-# 16. Fundamental Data Acquisition
-
-Fundamental information is retrieved using:
-
-```python
-yf.Ticker(symbol).info
-```
-
-The current implementation obtains the latest available Yahoo Finance information.
-
-The application does not currently maintain a historical fundamental database.
-
----
-
-# 17. Fundamental Data Normalization
-
-Several Yahoo Finance values require normalization.
-
-Percentage-like fields such as:
-
-* ROE
-* ROA
-* Profit Margin
-* Operating Margin
-* Gross Margin
-
-are normalized into percentage form.
-
-Growth values are similarly normalized.
-
-Debt/Equity is normalized when Yahoo provides a percentage-like representation.
-
-Missing values remain:
-
-```python
-NaN
-```
-
----
-
-# 18. Fundamental Factor Model
-
-There are 18 factors.
-
-## Quality — 9
-
-```text
-ROE
-ROA
-Debt/Equity
-Profit Margin
-Operating Margin
-Gross Margin
-Current Ratio
-Quick Ratio
-Free Cash Flow
-```
-
-## Growth — 3
-
-```text
-Revenue Growth
-Earnings Growth
-Quarterly Revenue Growth
-```
-
-## Valuation — 6
+The valuation model uses:
 
 ```text
 P/E
-Forward P/E
 P/B
-PEG
-Price/Sales
-EV/EBITDA
+```
+
+Weights:
+
+```text
+P/E = 60%
+P/B = 40%
+```
+
+Because lower positive valuation multiples are preferred:
+
+```python
+higher_is_better=False
+```
+
+is used for valuation percentile scoring.
+
+The engine converts non-positive values to unavailable values.
+
+---
+
+# 11. Fundamental Group Model
+
+Fundamental group weights:
+
+```text
+Quality    = 35%
+Growth     = 45%
+Valuation  = 20%
+```
+
+Formula:
+
+```text
+Fundamental Score
+=
+0.35 × Quality Score
++
+0.45 × Growth Score
++
+0.20 × Valuation Score
+```
+
+Available weights are renormalized when factors are missing.
+
+---
+
+# 12. Market Model
+
+The market model consists of:
+
+```text
+Momentum
+Trend
+Risk
+```
+
+Weights:
+
+```text
+Momentum = 50%
+Trend    = 30%
+Risk     = 20%
+```
+
+Formula:
+
+```text
+Market Research Score
+=
+0.50 × Momentum Score
++
+0.30 × Trend Score
++
+0.20 × Risk Score
 ```
 
 ---
 
-# 19. Quality Scoring
+# 13. Momentum Model Details
 
-Quality weights:
+The Momentum Score consists of:
 
-```text
-ROE                 20%
-ROA                 10%
-Debt/Equity         15%
-Profit Margin       10%
-Operating Margin    10%
-Gross Margin         5%
-Current Ratio        5%
-Quick Ratio          5%
-Free Cash Flow      20%
-```
+| Factor            | Weight |
+| ----------------- | -----: |
+| 3M Return         |    20% |
+| 6M Return         |    20% |
+| 12M Return        |    20% |
+| Price vs MA50     |    10% |
+| Price vs MA200    |    10% |
+| MA50 vs MA200     |    10% |
+| 52-week Proximity |    10% |
 
-Debt/Equity uses lower-is-better percentile scoring.
-
-Other quality factors use higher-is-better scoring.
-
----
-
-# 20. Growth Scoring
-
-Growth weights:
+The model therefore combines:
 
 ```text
-Revenue Growth              40%
-Earnings Growth             40%
-Quarterly Revenue Growth    20%
-```
-
-Higher growth receives a higher percentile score.
-
-The model intentionally does not use Yahoo's `earningsQuarterlyGrowth` as a substitute for EPS Growth.
-
----
-
-# 21. Valuation Scoring
-
-Valuation weights:
-
-```text
-P/E                 20%
-Forward P/E         15%
-P/B                 10%
-PEG                 10%
-Price/Sales         20%
-EV/EBITDA            25%
-```
-
-For scoring purposes, only positive valuation values are retained.
-
-Lower positive valuation multiples receive higher scores.
-
----
-
-# 22. Fundamental Group Weighting
-
-The three fundamental groups are combined as:
-
-```text
-Quality       35%
-Growth        35%
-Valuation     30%
-```
-
-This produces:
-
-```text
-fundamental_score
+Short-term momentum
++
+Medium-term momentum
++
+Long-term momentum
++
+Trend positioning
++
+Breakout proximity
 ```
 
 ---
 
-# 23. Fundamental Data Quality
+# 14. Risk Model Details
+
+Risk scoring uses:
+
+```text
+Volatility
+Maximum Drawdown
+```
+
+The volatility score uses:
+
+```text
+lower volatility = better
+```
+
+The maximum drawdown score uses:
+
+```text
+smaller drawdown = better
+```
+
+The final Risk Score therefore represents relative risk attractiveness.
+
+---
+
+# 15. Percentile Scoring
+
+The engine uses cross-sectional percentile scoring.
+
+Conceptually:
+
+```text
+Raw Factor
+     ↓
+Rank within Universe
+     ↓
+Percentile
+     ↓
+0–100 Score
+```
+
+For positively oriented factors:
+
+```text
+Higher raw value → Higher score
+```
+
+For negatively oriented factors such as valuation and risk:
+
+```text
+Lower raw value → Higher score
+```
+
+This allows different factor units to be combined into a common scoring framework.
+
+---
+
+# 16. Missing Factor Handling
+
+Missing factor values remain:
+
+```text
+NaN
+```
+
+They are not converted to:
+
+```text
+0
+```
+
+This is important because a missing financial value does not necessarily indicate poor performance.
+
+When calculating weighted scores, available factor weights are used rather than assigning a zero score to unavailable factors.
+
+---
+
+# 17. Fundamental Completeness
 
 The engine calculates both simple and weighted completeness.
 
-## Simple completeness
+## Simple factor completeness
 
 ```text
-Available factors / 18 × 100
+Available Factors
+------------------ × 100
+Total Factors
 ```
 
-## Weighted completeness
-
-Quality, Growth and Valuation completeness are weighted:
+With 11 total fundamental factors:
 
 ```text
-Quality       35%
-Growth        35%
-Valuation     30%
+Fundamental Simple Completeness
+=
+Available Factors / 11 × 100
 ```
 
-The result is:
+---
+
+# 18. Group Completeness
+
+Separate completeness metrics are calculated for:
+
+```text
+Quality
+Growth
+Valuation
+```
+
+Both simple and weighted completeness information is available.
+
+Weighted completeness uses the same factor weights that drive the corresponding score.
+
+This means a missing high-weight factor has a larger impact on weighted completeness than a missing low-weight factor.
+
+---
+
+# 19. Overall Fundamental Completeness
+
+The overall weighted completeness combines:
+
+```text
+Quality Completeness × 35%
++
+Growth Completeness × 45%
++
+Valuation Completeness × 20%
+```
+
+The result becomes:
 
 ```text
 fundamental_data_completeness
@@ -638,81 +731,80 @@ fundamental_data_completeness
 
 ---
 
-# 24. Confidence Classification
+# 20. Confidence Classification
 
-The completeness score determines confidence.
+The completeness value is mapped to confidence.
 
 ```text
->= 80%             High
->= 60% and < 80%   Medium
-< 60%              Low
-No data            No Data
+>= 80%       → High
+60%–79.99%   → Medium
+< 60%        → Low
 ```
 
-The following are eligible for headline fundamental research rankings:
+Ranking eligibility:
+
+```text
+High    → Eligible
+Medium  → Eligible
+Low     → Excluded
+```
+
+This prevents stocks with insufficient fundamental coverage from dominating headline rankings.
+
+---
+
+# 21. Fundamental Ranking Eligibility
+
+The engine creates:
+
+```text
+fundamental_ranking_eligible
+```
+
+which is true only for:
 
 ```text
 High
 Medium
 ```
 
-Low-confidence stocks remain available in the detailed dataset.
+confidence stocks.
+
+Low-confidence stocks are retained in the Research Data sheet but excluded from headline Fundamental and Combined rankings.
 
 ---
 
-# 25. Combined Research Score
+# 22. Combined Research Model
 
-The final combined score uses:
+The final score is:
 
 ```text
-Market Research Score    50%
-Fundamental Score        50%
+Combined Research Score
+=
+50% Market Research Score
++
+50% Fundamental Score
 ```
 
-A valid combined score requires:
+The score is only assigned where:
 
 ```text
 Fundamental ranking eligible
 AND
-Market Research Score available
+Market Research Score exists
 AND
-Fundamental Score available
+Fundamental Score exists
 ```
 
-Final ranking is assigned only to stocks with a valid combined score.
+This is an important design decision.
+
+A stock with poor data completeness is not automatically given a low fundamental score. Instead, it is excluded from the headline combined ranking because confidence is insufficient.
 
 ---
 
-# 26. Ranking Methodology
+# 23. Final Ranking
 
-The engine generates several research views.
-
-## Market Ranking
-
-Sorted primarily by:
-
-```text
-Market Research Score
-```
-
----
-
-## Fundamental Ranking
-
-Only fundamental-ranking-eligible stocks are considered.
-
-Sorted by:
-
-```text
-Fundamental Score
-Fundamental Completeness
-```
-
----
-
-## Combined Ranking
-
-Sorted by:
+Stocks are sorted by:
 
 ```text
 Combined Research Score
@@ -720,137 +812,212 @@ Market Research Score
 Fundamental Score
 ```
 
-A sequential `final_rank` is assigned to stocks with valid combined scores.
+in descending order.
 
----
-
-# 27. Detailed Research Output
-
-The detailed top-stock view combines:
-
-### Market
-
-* Price
-* Returns
-* Moving averages
-* 52-week metrics
-* Volatility
-* Drawdown
-* Volume metrics
-
-### Fundamentals
-
-All 18 fundamental factors.
-
-### Scores
-
-* Momentum
-* Trend
-* Risk
-* Market Research
-* Quality
-* Growth
-* Valuation
-* Fundamental
-* Completeness
-* Confidence
-* Combined Research Score
-
----
-
-# 28. Factor Leaders
-
-The engine identifies the top five stocks for selected factors.
-
-Factors include:
+The engine then creates:
 
 ```text
-3M Return
-6M Return
-12M Return
-
-ROE
-ROA
-Profit Margin
-Operating Margin
-Gross Margin
-Free Cash Flow
-
-Revenue Growth
-Earnings Growth
-Quarterly Revenue Growth
-
-Momentum Score
-Trend Score
-Risk Score
-
-Quality Score
-Growth Score
-Valuation Score
-Fundamental Score
-Combined Research Score
+final_rank
 ```
 
+for stocks with a valid Combined Research Score.
+
 ---
 
-# 29. Research Candidate Logic
+# 24. Research Candidate Model
 
-A research candidate must meet all of the following:
+The research-candidate filter is deliberately more selective than the general ranking.
+
+Conditions:
 
 ```text
-Combined Score exists
+Combined Research Score exists
 Fundamental ranking eligible
 Market Research Score >= 60
 Fundamental Score >= 60
 Trend Score >= 66.67
-Fundamental Completeness >= 60%
+Fundamental completeness >= 60%
 ```
 
-The candidates are then sorted using the combined, market and fundamental scores.
+This creates a second-level research universe.
 
-The top 10 are displayed.
+The distinction is:
 
-This is a **research shortlist**, not an automated trading signal.
+```text
+Ranking
+```
+
+answers:
+
+> Which stocks score highest?
+
+while:
+
+```text
+Research Candidate Filter
+```
+
+answers:
+
+> Which stocks satisfy a minimum quality, market-strength and data-confidence standard?
 
 ---
 
-# 30. Score Distribution Analysis
+# 25. Data Sources
 
-The system provides descriptive statistics for:
+## Market Data
+
+Market data is obtained through the project's existing market-data implementation.
+
+The current workflow uses Yahoo Finance data through the project's market-data layer.
+
+## Fundamental Data
+
+Primary source:
 
 ```text
-Market Research Score
-Fundamental Score
-Quality Score
-Growth Score
-Valuation Score
-Combined Research Score
-Fundamental Completeness
+Dalal / BSE
 ```
 
-Statistics include:
+Supplementary source:
 
 ```text
-Minimum
-25th percentile
-Median
-75th percentile
-Maximum
+yfinance
+```
+
+The source methodology is intentionally documented so users can understand where each type of information originates.
+
+---
+
+# 26. Fundamental Source Philosophy
+
+The fundamental system follows three principles.
+
+### Principle 1 — Use supported data directly
+
+If Dalal provides a factor, it is used directly.
+
+### Principle 2 — Supplement only where necessary
+
+yfinance is used to supplement YoY growth information.
+
+### Principle 3 — Never fabricate missing information
+
+Unsupported or unavailable fields remain unavailable.
+
+This improves transparency and makes data-quality measurement possible.
+
+---
+
+# 27. Raw Fundamental Data Retention
+
+The research dataset retains raw fundamental period information where available.
+
+Examples include:
+
+```text
+Current Revenue
+Previous Quarter Revenue
+Current Net Profit
+Previous Quarter Net Profit
+Current EPS
+Previous Quarter EPS
+Fundamental Period
+Previous Fundamental Period
+Financial-Year Period
+```
+
+YoY source information is also retained where available.
+
+This allows the calculated growth factors to be inspected rather than treated as unexplained black-box values.
+
+---
+
+# 28. Output Dataset
+
+The Research Data sheet is designed to contain:
+
+## Identification
+
+```text
+symbol
+BSE code
+BSE company name
+BSE security symbol
+Dalal security ID
+```
+
+## Market metrics
+
+```text
+price
+returns
+moving averages
+52-week metrics
+volatility
+drawdown
+volume metrics
+```
+
+## Market scores
+
+```text
+momentum_score
+trend_score
+risk_score
+market_research_score
+```
+
+## Fundamental metrics
+
+```text
+ROE
+profit margin
+operating margin
+QoQ growth
+YoY growth
+P/E
+P/B
+```
+
+## Fundamental scores
+
+```text
+quality_score
+growth_score
+valuation_score
+fundamental_score
+```
+
+## Data quality
+
+```text
+fundamental_factors_available
+fundamental_simple_completeness
+quality_data_completeness
+growth_data_completeness
+valuation_data_completeness
+quality_weighted_completeness
+growth_weighted_completeness
+valuation_weighted_completeness
+fundamental_weighted_completeness
+fundamental_data_completeness
+fundamental_confidence
+fundamental_ranking_eligible
+```
+
+## Final research
+
+```text
+combined_research_score
+final_rank
 ```
 
 ---
 
-# 31. Excel Architecture
+# 29. Excel Architecture
 
-The Excel workbook is:
-
-```text
-results/fundamental_alpha_forge_results.xlsx
-```
-
-It is rebuilt during every successful run.
-
-The workbook contains:
+The Excel workbook contains four major sheets.
 
 ```text
 Dashboard
@@ -861,11 +1028,9 @@ Score Statistics
 
 ---
 
-# 32. Dashboard Architecture
+# 30. Dashboard Architecture
 
-The Dashboard is created as the first worksheet.
-
-It contains:
+The Dashboard contains:
 
 ## Run Information
 
@@ -873,7 +1038,7 @@ It contains:
 Start Timestamp
 End Timestamp
 Runtime Seconds
-Runtime HH:MM:SS
+Runtime
 ```
 
 ## KPI Cards
@@ -889,141 +1054,34 @@ Average Completeness
 Median Completeness
 ```
 
----
-
-# 33. Dashboard Research Tables
-
-The dashboard includes:
-
-### Top 10 Combined Research Stocks
-
-Displays:
+## Ranking Tables
 
 ```text
-Final Rank
-Symbol
-Price
-Market Research Score
-Fundamental Score
-Fundamental Completeness
-Combined Research Score
+Top 10 Combined Research Stocks
+Top 10 Market Stocks
 ```
 
-### Top 10 Market Stocks
-
-Displays:
+## Analytical Sections
 
 ```text
-Symbol
-Price
-Momentum
-Trend
-Risk
-Market Research Score
-```
-
-### Top 10 Quality Stocks
-
-Displays:
-
-```text
-Symbol
-Quality Score
-ROE
-ROA
-Profit Margin
-Operating Margin
-Debt/Equity
-```
-
-### Top 10 Growth Stocks
-
-Displays:
-
-```text
-Symbol
-Growth Score
-Revenue Growth
-Earnings Growth
-Quarterly Revenue Growth
-```
-
-### Top 10 Valuation Stocks
-
-Displays:
-
-```text
-Symbol
-Valuation Score
-P/E
-Forward P/E
-P/B
-PEG
-EV/EBITDA
+Fundamental Confidence Breakdown
+Average Market Score Components
+Average Fundamental Components
+Fundamental Factor Coverage
+Risk / Return Statistics
+Top 10 Quality Stocks
+Top 10 Growth Stocks
+Top 10 Valuation Stocks
+Research Candidate Summary
 ```
 
 ---
 
-# 34. Dashboard Charts
+# 31. Factor Coverage Sheet
 
-The dashboard generates:
+The Factor Coverage sheet provides an audit-oriented view of the fundamental dataset.
 
-### Fundamental Confidence Pie Chart
-
-Categories:
-
-```text
-High
-Medium
-Low
-No Data
-```
-
-### Market Score Component Chart
-
-Components:
-
-```text
-Momentum
-Trend
-Risk
-Market Research
-```
-
-### Fundamental Component Chart
-
-Components:
-
-```text
-Quality
-Growth
-Valuation
-Fundamental
-```
-
-### Fundamental Coverage Chart
-
-Displays the highest-coverage fundamental factors.
-
-### Risk / Return Statistics
-
-Displays average and median:
-
-```text
-3M Return
-6M Return
-12M Return
-Volatility
-Maximum Drawdown
-```
-
----
-
-# 35. Factor Coverage Sheet
-
-The Factor Coverage sheet provides a detailed view of data availability.
-
-For every fundamental factor:
+Each factor contains:
 
 ```text
 Group
@@ -1035,739 +1093,978 @@ Status
 Weight
 ```
 
-Status:
+Coverage status:
 
 ```text
-Strong       >= 80%
-Moderate     >= 60%
-Sparse       < 60%
+Strong    >= 80%
+Moderate  >= 60%
+Sparse    < 60%
 ```
 
-Conditional formatting provides visual interpretation of coverage.
+Conditional formatting makes weak and strong coverage visually identifiable.
 
 ---
 
-# 36. Score Statistics Sheet
+# 32. Score Statistics Sheet
 
-The Score Statistics sheet contains descriptive statistics for the major research scores.
-
-It also contains a correlation matrix.
-
-The correlation matrix helps investigate relationships between:
+The Score Statistics sheet provides:
 
 ```text
-Momentum
-Trend
-Risk
-Market Research
-Quality
-Growth
-Valuation
-Fundamental
-Combined
-Completeness
+Descriptive Statistics
 ```
 
-This is useful for understanding whether different components provide distinct information or are highly correlated.
+for the available score columns.
 
----
-
-# 37. Research Data Sheet
-
-The Research Data sheet contains the underlying stock-level research dataset.
-
-The sheet includes:
-
-* Header formatting
-* Freeze panes
-* Auto-filter
-* Numeric formatting
-* Automatic column sizing
-* Conditional formatting for major score fields
-
-The score columns receive visual color-scale formatting.
-
----
-
-# 38. Excel Data Safety
-
-The `excel_safe_value()` helper converts values that Excel/openpyxl cannot reliably store directly.
-
-It handles:
-
-* NumPy integers
-* NumPy floating-point values
-* NaN
-* Infinity
-* NumPy booleans
-* Pandas missing values
-
-Missing numerical values are written as blank Excel cells rather than invalid numerical values.
-
----
-
-# 39. Data-Bar Compatibility Fix
-
-The Factor Coverage sheet explicitly specifies a color for the Excel data bar.
-
-This avoids an `openpyxl` compatibility issue where a `DataBarRule` can otherwise produce a `DataBar.color = None` error in some versions.
-
-The current implementation explicitly supplies:
+The calculated statistics include:
 
 ```text
-color = "5B9BD5"
+Count
+Mean
+Standard Deviation
+Minimum
+25th Percentile
+Median
+75th Percentile
+Maximum
 ```
 
-for the data bar.
+A correlation matrix is also generated for the available scores.
+
+This is useful for identifying whether different components are measuring highly similar characteristics.
 
 ---
 
-# 40. Runtime Architecture
+# 33. Excel Safety
 
-The program uses two timing mechanisms:
+The function:
 
 ```python
-datetime.now()
+excel_safe_value()
 ```
 
-for human-readable timestamps, and:
+converts NumPy values into Excel-compatible Python values.
+
+It also converts:
+
+```text
+NaN
+Infinity
+```
+
+into:
+
+```text
+None
+```
+
+This prevents invalid values from being written into the workbook.
+
+---
+
+# 34. Excel Formatting
+
+The workbook applies:
+
+* Header formatting
+* Number formatting
+* Column sizing
+* Frozen panes
+* Auto filters
+* Conditional formatting
+* Data bars
+* Color scales
+* Charts
+* KPI cards
+* Section headers
+
+The goal is to make the workbook useful both as a research dataset and as a human-readable report.
+
+---
+
+# 35. Runtime Architecture
+
+The program records:
+
+```python
+PROGRAM_START_TIME
+PROGRAM_END_TIME
+PROGRAM_ELAPSED_SECONDS
+```
+
+The performance timer uses:
 
 ```python
 time.perf_counter()
 ```
 
-for elapsed runtime measurement.
+for elapsed-time measurement.
 
-At the start:
-
-```text
-PROGRAM_START_TIME
-performance_start
-```
-
-are initialized.
-
-After research calculations are complete:
-
-```text
-PROGRAM_END_TIME
-PROGRAM_ELAPSED_SECONDS
-```
-
-are captured before Excel generation.
-
-The runtime is subsequently displayed both in the console and Excel Dashboard.
+The completed research runtime is captured before Excel generation so that the dashboard receives the completed research runtime rather than being affected by workbook-generation time.
 
 ---
 
-# 41. Main Execution Sequence
+# 36. Error Handling
 
-The actual execution sequence is:
+The program entry point handles two major cases.
 
-```text
-STEP 1
-Refresh and load universe
+## KeyboardInterrupt
 
-STEP 2
-Download market data
-
-STEP 3
-Build market research dataframe
-
-STEP 4
-Apply data-quality filter
-
-STEP 5
-Calculate Momentum Score
-
-STEP 6
-Calculate Trend Score
-
-STEP 7
-Calculate Risk Score
-
-STEP 8
-Calculate Market Research Score
-
-STEP 9
-Download fundamental data
-
-STEP 10
-Merge fundamentals with market data
-
-STEP 11
-Calculate fundamental data quality
-
-STEP 12
-Display fundamental availability
-
-STEP 13
-Calculate Quality Score
-
-STEP 14
-Calculate Growth Score
-
-STEP 15
-Calculate Valuation Score
-
-STEP 16
-Calculate Fundamental Score
-
-STEP 17
-Calculate Combined Research Score
-
-STEP 18
-Display universe summary
-
-STEP 19
-Display market rankings
-
-STEP 20
-Display fundamental rankings
-
-STEP 21
-Display combined rankings
-
-STEP 22
-Display detailed research
-
-STEP 23
-Display factor leaders
-
-STEP 24
-Display research candidates
-
-STEP 25
-Display score distribution
-
-STEP 26
-Capture completed research runtime
-
-STEP 27
-Generate Excel report
-
-STEP 28
-Display research notes
-
-FINAL
-Display final summary and runtime
-```
-
----
-
-# 42. Program Entry Point
-
-The application uses the standard Python entry-point pattern:
-
-```python
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        ...
-    except Exception as error:
-        ...
-```
-
-This allows the main research pipeline to execute when the module is run directly.
-
----
-
-# 43. Error Handling
-
-The application explicitly checks for critical failures.
-
-## Universe Failure
-
-Examples:
-
-* `universe.py` does not exist
-* `symbols` is missing
-* Universe contains fewer than 400 symbols
-
----
-
-## Market Data Failure
-
-The application stops if:
-
-```text
-No market data is returned
-```
-
-or:
-
-```text
-No valid symbols are returned
-```
-
----
-
-## Data Quality Failure
-
-If every stock is removed by the data-quality filter, the research run stops rather than producing an empty research report.
-
----
-
-## User Interruption
-
-`KeyboardInterrupt` is handled separately and reports:
+If the user stops the program:
 
 ```text
 Research run interrupted by user.
 ```
 
+is displayed.
+
+Exit code:
+
+```text
+1
+```
+
 ---
 
-## Unexpected Error
+## General Exception
 
-Unexpected exceptions produce:
+Unexpected failures produce:
 
 ```text
 RESEARCH RUN FAILED
 ```
 
-along with the error message.
+followed by the error message.
 
-The process exits with status `1`.
-
----
-
-# 44. Fundamental Data Quality Philosophy
-
-The most important data-quality principle is:
-
-> **Missing data is not equivalent to zero.**
-
-For example:
+The program exits with status code:
 
 ```text
-Missing ROE
-```
-
-does not mean:
-
-```text
-ROE = 0%
-```
-
-Instead:
-
-```text
-ROE = NaN
-```
-
-The factor is excluded from the weighted score while the missingness contributes to completeness statistics.
-
-This avoids introducing artificial negative signals.
-
----
-
-# 45. Current Fundamental Data Limitation
-
-The current fundamental information is sourced from the latest available Yahoo Finance information.
-
-The system does not currently preserve:
-
-```text
-Historical financial statements
-Historical fundamental snapshots
-Publication dates
-Availability dates
-Point-in-time fundamentals
-```
-
-Therefore:
-
-```text
-Current Research = Supported
-Historical Fundamental Backtest = Not Yet Valid
+1
 ```
 
 ---
 
-# 46. Look-Ahead Bias Consideration
+# 37. Current Limitations
 
-A historical backtest could become invalid if current fundamental information is used to make decisions about historical dates.
+The current engine has several intentional limitations.
 
-For example:
+## 37.1 Current fundamentals are not point-in-time
+
+Fundamental data represents currently available information.
+
+It is not yet a complete historical dataset with reporting-date alignment.
+
+---
+
+## 37.2 Historical fundamental backtesting is not yet valid
+
+Using today's fundamental values to simulate historical decisions can introduce:
 
 ```text
-2026 fundamental data
+Look-ahead bias
+```
+
+Therefore the current fundamental engine should not yet be considered a production-grade historical backtesting system.
+
+---
+
+## 37.3 No historical financial database
+
+The current system does not yet maintain a complete historical database containing every financial statement version as it became publicly available.
+
+---
+
+## 37.4 No portfolio construction
+
+The current engine ranks stocks.
+
+It does not yet decide:
+
+```text
+Position size
+Portfolio weights
+Number of holdings
+Entry timing
+Exit timing
+Stop loss
+Transaction costs
+Slippage
+```
+
+---
+
+## 37.5 No backtesting engine yet
+
+The current system does not yet implement the intended VectorBT-based historical portfolio backtest.
+
+---
+
+# 38. Why the Current Architecture Is Important
+
+The project is intentionally being built in stages.
+
+The current stage establishes:
+
+```text
+Reliable Universe
++
+Reliable Market Data
++
+Market Factors
++
+Fundamental Factors
++
+Transparent Scoring
++
+Data Completeness
++
+Confidence
++
+Ranking
++
+Reporting
+```
+
+before introducing historical backtesting.
+
+This avoids building a sophisticated backtest on top of unreliable or incorrectly timestamped fundamental data.
+
+---
+
+# 39. Future Point-in-Time Architecture
+
+The intended next-generation architecture is:
+
+```text
+Historical Financial Statements
         ↓
-applied to
+Publication / Reporting Dates
         ↓
-2023 stock price
-```
-
-could introduce look-ahead bias.
-
-Before fundamental backtesting is implemented, the project needs a point-in-time dataset containing the date on which financial information became available to investors.
-
----
-
-# 47. Future Historical Fundamental Model
-
-The next fundamental research layer should introduce:
-
-```text
-Historical Balance Sheets
-Historical Income Statements
-Historical Cash Flow Statements
-Historical Reporting Dates
-Historical Availability Dates
-TTM Metrics
-3-Year Growth
-5-Year Growth
-Historical Margin Trends
-Historical ROE/ROA
-Historical Leverage
-Historical Valuation
-```
-
-The system can then calculate historical factor scores without relying on today's information.
-
----
-
-# 48. Future Backtesting Layer
-
-Once point-in-time fundamentals are available, the research engine can evolve into:
-
-```text
-Point-in-Time Dataset
+Point-in-Time Database
         ↓
-Historical Factor Engine
+Historical Fundamental Factors
         ↓
-Historical Research Scores
+Historical Market Factors
+        ↓
+Historical Scores
+        ↓
+Historical Rankings
         ↓
 Portfolio Construction
         ↓
-Backtesting
+VectorBT
         ↓
-Transaction Costs
+Walk-Forward Testing
         ↓
-Slippage
-        ↓
-Benchmark Comparison
-        ↓
-Risk Analysis
+Out-of-Sample Validation
 ```
-
-The intended future testing framework mentioned by the project is **VectorBT**.
 
 ---
 
-# 49. Walk-Forward Validation
+# 40. Future Fundamental Dataset
 
-After historical backtesting, the system should support walk-forward validation.
+The next fundamental-data phase should introduce:
+
+## Historical statements
+
+* Quarterly revenue
+* Quarterly profit
+* Quarterly EPS
+* Balance sheet data
+* Cash-flow data
+
+## Derived metrics
+
+* TTM revenue
+* TTM earnings
+* TTM EPS
+* 3-year growth
+* 5-year growth
+* CAGR metrics
+* Margin trends
+* ROE trends
+* ROIC
+* Debt metrics
+* Cash-flow quality
+
+## Valuation history
+
+* Historical P/E
+* Historical P/B
+* Historical EV/EBITDA where available
+* Historical valuation percentiles
+
+---
+
+# 41. Point-in-Time Requirement
+
+Every historical fundamental observation should ideally have:
+
+```text
+Financial Period
++
+Reporting Date
++
+Publication / Availability Date
++
+Value
++
+Source
+```
+
+The critical field for unbiased backtesting is the date on which the information became available to the market.
+
+For example:
+
+```text
+Financial Quarter
+        ↓
+Company Reports Results
+        ↓
+Information Becomes Public
+        ↓
+Only then can a backtest use it
+```
+
+This prevents future information from leaking into historical decisions.
+
+---
+
+# 42. Future Backtesting Framework
+
+Once point-in-time fundamentals are available, the intended framework is:
+
+```text
+Historical Data
+      ↓
+Factor Calculation
+      ↓
+Cross-sectional Ranking
+      ↓
+Portfolio Selection
+      ↓
+Entry
+      ↓
+Holding Period
+      ↓
+Rebalance
+      ↓
+Transaction Costs
+      ↓
+Portfolio Returns
+      ↓
+Performance Metrics
+```
+
+VectorBT is planned for the backtesting stage.
+
+---
+
+# 43. Walk-Forward Testing
+
+Future validation should use walk-forward methodology.
 
 Conceptually:
 
 ```text
 Training Period
-       ↓
-Strategy Parameters
-       ↓
+      ↓
+Model / Rule Definition
+      ↓
 Validation Period
-       ↓
-Performance Measurement
-       ↓
-Next Training Window
-       ↓
+      ↓
+Out-of-Sample Period
+      ↓
+Advance Window
+      ↓
 Repeat
 ```
 
-This reduces the risk of judging a strategy solely on a single historical sample.
+This helps determine whether a factor model continues to work outside the period in which it was developed.
 
 ---
 
-# 50. Out-of-Sample Validation
+# 44. Robustness Testing
 
-The eventual research framework should distinguish:
+Future research should test sensitivity to:
 
-```text
-In-Sample Performance
-```
-
-from:
-
-```text
-Out-of-Sample Performance
-```
-
-This is important for determining whether a factor model generalizes beyond the historical period used to develop it.
-
----
-
-# 51. Project Roadmap
-
-## Stage 1 — Market Research
-
-Completed:
-
-* Nifty 500 universe
-* Historical OHLCV
-* Market metrics
-* Momentum
-* Trend
-* Risk
-* Market Research Score
-
----
-
-## Stage 2 — Fundamental Research
-
-Current:
-
-* Current fundamental data
-* Quality
-* Growth
-* Valuation
-* Completeness
-* Confidence
-* Fundamental Score
-* Combined Score
-* Excel reporting
-
----
-
-## Stage 3 — Historical Fundamentals
-
-Planned:
-
-* Historical statements
-* Point-in-time dates
-* TTM calculations
-* Historical growth
-* Historical factor scores
-
----
-
-## Stage 4 — Backtesting
-
-Planned:
-
-* Portfolio construction
-* Historical signals
-* VectorBT
+* Ranking thresholds
+* Factor weights
+* Holding periods
+* Rebalancing frequency
+* Universe definitions
 * Transaction costs
 * Slippage
-* Benchmark comparison
+* Market regimes
+* Sector concentration
+* Liquidity constraints
+
+The objective is to determine whether results are robust or dependent on a narrow set of assumptions.
 
 ---
 
-## Stage 5 — Validation
+# 45. Research Interpretation
 
-Planned:
+The system should be interpreted as a ranking framework.
 
-* Walk-forward analysis
-* Out-of-sample validation
-* Sensitivity testing
-* Regime analysis
-* Drawdown analysis
-* Turnover analysis
-* Risk-adjusted performance
-* Factor attribution
-
----
-
-# 52. Current Non-Goals
-
-The current implementation does **not** claim to provide:
-
-* Automated trading
-* Broker order execution
-* Buy/sell recommendations
-* Historical point-in-time fundamental backtesting
-* Guaranteed investment returns
-* Complete institutional-grade fundamental history
-* Fully validated alpha generation
-
-These may be considered only after the appropriate research and validation layers are implemented.
-
----
-
-# 53. Research Interpretation
-
-The Combined Research Score should be interpreted as a **relative research ranking**.
-
-A higher score means the stock has a stronger combination of the model's:
+For example:
 
 ```text
-Market characteristics
-+
-Fundamental characteristics
+High Combined Score
 ```
 
-It does not automatically mean:
+means the stock has a relatively strong combination of the factors included in the model.
+
+It does **not** mean:
 
 ```text
-Guaranteed future outperformance
+Guaranteed future return
 ```
 
-Similarly, a low score does not automatically mean a stock is fundamentally bad.
+Similarly:
 
-Data completeness and confidence must also be considered.
+```text
+Low Score
+```
+
+does not necessarily mean a company is fundamentally poor.
+
+It means the stock ranks relatively lower according to the current model and available data.
 
 ---
 
-# 54. Important Methodological Principles
+# 46. Confidence vs Score
 
-The current implementation is based on several principles:
-
-### Transparency
-
-Individual factors and component scores remain visible.
-
-### Relative Ranking
-
-Percentile scores make different factor units comparable.
-
-### Missing Data Awareness
-
-Missing values remain missing.
-
-### Confidence Awareness
-
-Completeness is measured independently from the score.
-
-### Current vs Historical Separation
-
-Current fundamentals are not represented as historical point-in-time data.
-
-### Research Before Trading
-
-The current engine produces research outputs rather than automated trading decisions.
-
----
-
-# 55. Output File
-
-The principal generated output is:
+A particularly important distinction in the architecture is:
 
 ```text
-results/fundamental_alpha_forge_results.xlsx
+Score ≠ Confidence
 ```
 
-The workbook provides both:
+A stock can have a high score but incomplete data.
+
+Therefore the engine separately measures:
 
 ```text
-High-level Dashboard
+Fundamental Score
 ```
 
 and:
 
 ```text
-Detailed Research Data
+Fundamental Data Completeness
 ```
 
-along with:
+and then uses:
 
 ```text
-Factor Coverage
-Score Statistics
+Fundamental Confidence
+```
+
+to determine ranking eligibility.
+
+This is designed to reduce false precision.
+
+---
+
+# 47. Research Transparency
+
+The system deliberately exposes:
+
+```text
+Raw Factors
++
+Factor Scores
++
+Group Scores
++
+Completeness
++
+Confidence
++
+Final Score
+```
+
+rather than only presenting a final ranking.
+
+This allows a researcher to investigate:
+
+> Why did this stock rank highly?
+
+rather than treating the system as a black box.
+
+---
+
+# 48. Reproducibility
+
+A research run should preserve enough information to understand:
+
+```text
+What universe was analysed?
+What market data was available?
+What fundamental data was available?
+Which factors were missing?
+How were scores calculated?
+What confidence level was assigned?
+Why was a stock eligible or excluded?
+```
+
+Future versions should expand this further by storing:
+
+* Run date
+* Data timestamps
+* Source timestamps
+* Model version
+* Configuration version
+* Universe version
+* Fundamental dataset version
+
+---
+
+# 49. Development Philosophy
+
+FundamentalAlphaForge follows a staged development philosophy:
+
+### Stage 1
+
+```text
+Market Data Foundation
+```
+
+### Stage 2
+
+```text
+Current Fundamental Research
+```
+
+### Stage 3
+
+```text
+Historical Fundamental Dataset
+```
+
+### Stage 4
+
+```text
+Point-in-Time Research
+```
+
+### Stage 5
+
+```text
+Backtesting
+```
+
+### Stage 6
+
+```text
+Walk-Forward Validation
+```
+
+### Stage 7
+
+```text
+Out-of-Sample Validation
+```
+
+### Stage 8
+
+```text
+Portfolio Research
+```
+
+The intention is to validate each layer before adding complexity.
+
+---
+
+# 50. Testing Strategy
+
+The project should maintain tests for critical components including:
+
+```text
+Configuration
+Universe handling
+Market-data transformations
+Return calculations
+Moving averages
+Percentile scoring
+Weighted scoring
+Completeness calculations
+Confidence classification
+Fundamental calculations
+Ranking logic
+Excel output
+```
+
+As the project grows, unit tests and integration tests should be expanded before introducing historical backtesting.
+
+---
+
+# 51. Important Implementation Principles
+
+The following principles should remain stable as the project evolves.
+
+### Principle 1
+
+**Do not convert missing financial information into zero.**
+
+### Principle 2
+
+**Do not fabricate unsupported fundamental values.**
+
+### Principle 3
+
+**Keep raw data available for inspection.**
+
+### Principle 4
+
+**Separate data completeness from factor score.**
+
+### Principle 5
+
+**Do not mix current fundamentals with historical backtesting without point-in-time controls.**
+
+### Principle 6
+
+**Prefer transparent factor models over unexplained black-box outputs.**
+
+### Principle 7
+
+**Validate future strategy changes through out-of-sample testing.**
+
+---
+
+# 52. Current Research Formula Summary
+
+## Market
+
+```text
+Market Research
+=
+50% Momentum
++
+30% Trend
++
+20% Risk
+```
+
+## Fundamental
+
+```text
+Fundamental
+=
+35% Quality
++
+45% Growth
++
+20% Valuation
+```
+
+## Combined
+
+```text
+Combined Research
+=
+50% Market Research
++
+50% Fundamental
+```
+
+## Quality
+
+```text
+40% ROE
++
+30% Net Profit Margin
++
+30% Operating Margin
+```
+
+## Growth
+
+```text
+40% QoQ
++
+60% YoY
+```
+
+Within both QoQ and YoY:
+
+```text
+40% Revenue
++
+35% Net Profit
++
+25% EPS
+```
+
+## Valuation
+
+```text
+60% P/E
++
+40% P/B
 ```
 
 ---
 
-# 56. Recommended Research Workflow
+# 53. Research Candidate Formula
 
-A practical workflow for using the current engine is:
+A stock becomes a Research Candidate when:
 
 ```text
-1. Run FundamentalAlphaForge
-        ↓
-2. Review Universe Summary
-        ↓
-3. Review Market Rankings
-        ↓
-4. Review Fundamental Rankings
-        ↓
-5. Review Combined Rankings
-        ↓
-6. Review Confidence / Completeness
-        ↓
-7. Review Research Candidates
-        ↓
-8. Open Excel Dashboard
-        ↓
-9. Inspect Research Data
-        ↓
-10. Investigate individual companies separately
+Combined Score exists
+AND
+Fundamental Confidence is High or Medium
+AND
+Market Research Score >= 60
+AND
+Fundamental Score >= 60
+AND
+Trend Score >= 66.67
+AND
+Fundamental Completeness >= 60%
 ```
 
-The output should be treated as the beginning of deeper equity research rather than the final investment decision.
+This is a screening rule, not a trading signal.
 
 ---
 
-# 57. Final Architecture Vision
+# 54. Final Research Output
 
-The intended long-term architecture is:
+At the end of a successful run, the console reports:
 
 ```text
-                         FUNDAMENTALALPHAFORGE
-                                  │
-              ┌───────────────────┴───────────────────┐
-              │                                       │
-       MARKET DATA LAYER                       FUNDAMENTAL DATA
-              │                                       │
-       OHLCV / Volume                        Financial Statements
-              │                                       │
-       Market Factors                         Point-in-Time Data
-              │                                       │
-      ┌───────┼────────┐                    ┌─────────┼─────────┐
-      │       │        │                    │         │         │
-   Momentum Trend     Risk                Quality   Growth  Valuation
-      │       │        │                    │         │         │
-      └───────┼────────┘                    └─────────┼─────────┘
-              │                                       │
-              ▼                                       ▼
-       Market Research                       Fundamental Score
-              │                                       │
-              └──────────────────┬────────────────────┘
-                                 ▼
-                       Combined Research Score
-                                 │
-                                 ▼
-                        Research Candidates
-                                 │
-                                 ▼
-                       Historical Factor Data
-                                 │
-                                 ▼
-                            Backtesting
-                                 │
-                                 ▼
-                       Walk-Forward Testing
-                                 │
-                                 ▼
-                      Out-of-Sample Validation
-                                 │
-                                 ▼
-                    Quantitative Research Platform
+Universe
+Valid market symbols
+Market-researched stocks
+Fundamental scores
+Fundamental eligible stocks
+Combined ranking stocks
+Average fundamental completeness
+Median fundamental completeness
+Top research stock
+Market score
+Fundamental score
+Quality score
+Growth score
+Valuation score
+Data completeness
+Confidence
+```
+
+The Excel workbook provides the persistent research output.
+
+---
+
+# 55. Final Research Stock
+
+The top stock displayed by the final summary is simply the stock with the highest valid:
+
+```text
+Combined Research Score
+```
+
+among the eligible stocks.
+
+It should be interpreted as:
+
+```text
+Top-ranked research stock according to the current model
+```
+
+and not:
+
+```text
+Guaranteed best investment
 ```
 
 ---
 
-# 58. Conclusion
+# 56. Current Status
 
-FundamentalAlphaForge currently provides a structured framework for combining **market research and current fundamental research** across the Nifty 500 universe.
+## Implemented
 
-Its strongest architectural characteristics are:
-
-* Explicit factor definitions
-* Transparent scoring
-* Separate market and fundamental models
-* Missing-data awareness
-* Completeness measurement
+* Nifty 500 universe refresh
+* Universe loading
+* 2-year market-data retrieval
+* Market factor calculation
+* Momentum scoring
+* Trend scoring
+* Risk scoring
+* Market Research Score
+* Dalal/BSE fundamental retrieval
+* yfinance supplementary YoY growth
+* Quality scoring
+* Growth scoring
+* Valuation scoring
+* Fundamental Score
+* Fundamental completeness
 * Confidence classification
-* Combined ranking
-* Research candidate filtering
-* Detailed Excel output
-* Visual dashboard
-* Runtime monitoring
-* Explicit separation between current research and future historical backtesting
+* Ranking eligibility
+* Combined Research Score
+* Market rankings
+* Fundamental rankings
+* Combined rankings
+* Factor leaders
+* Research candidates
+* Score distributions
+* Research diagnostics
+* Excel Research Data
+* Excel Dashboard
+* Factor Coverage sheet
+* Score Statistics sheet
+* Excel charts
+* Conditional formatting
+* Runtime reporting
+* Error handling
 
-The next major technical milestone is **not simply adding more indicators**.
+---
 
-The most important next step is building a **historical, point-in-time fundamental data layer**. That foundation is required before meaningful historical fundamental backtesting, walk-forward testing, and out-of-sample validation can be performed.
+# 57. Next Major Milestone
+
+The next major milestone should be:
+
+```text
+POINT-IN-TIME HISTORICAL FUNDAMENTAL DATA
+```
+
+rather than immediately building a backtest.
+
+The recommended progression is:
+
+```text
+Historical Financial Data
+        ↓
+Reporting Dates
+        ↓
+Publication Dates
+        ↓
+Historical Fundamental Database
+        ↓
+Historical Factor Engine
+        ↓
+Historical Ranking Engine
+        ↓
+VectorBT
+        ↓
+Walk-Forward Testing
+        ↓
+Out-of-Sample Validation
+```
+
+---
+
+# 58. Long-Term Vision
+
+The long-term objective of FundamentalAlphaForge is to become a research platform capable of answering questions such as:
+
+```text
+Which factors historically worked?
+
+Under which market regimes?
+
+For which sectors?
+
+With what holding period?
+
+At what rebalance frequency?
+
+With what transaction costs?
+
+How stable are the results?
+
+Do the results survive out-of-sample testing?
+
+Does the factor combination produce economically meaningful
+and statistically robust results?
+```
+
+The final objective is therefore not simply to produce a stock list.
+
+It is to build a **reproducible quantitative research framework**.
+
+---
+
+# 59. Disclaimer
+
+FundamentalAlphaForge is a software and quantitative research project.
+
+Its outputs are model-generated research results based on available data and predefined rules.
+
+They should not be interpreted as personalized investment advice.
+
+Historical results, where eventually produced, may contain data-quality limitations and cannot guarantee future performance.
+
+Any strategy developed from this system should undergo appropriate:
+
+```text
+Historical Testing
++
+Walk-Forward Testing
++
+Out-of-Sample Validation
++
+Transaction-Cost Analysis
++
+Robustness Testing
+```
+
+before being considered for real-world deployment.
+
+---
+
+# 60. Conclusion
+
+FundamentalAlphaForge currently provides a structured framework for combining:
+
+```text
+Market Momentum
++
+Trend
++
+Risk
++
+Fundamental Quality
++
+Growth
++
+Valuation
++
+Data Completeness
++
+Confidence
+```
+
+into a transparent equity research ranking.
+
+The current implementation establishes the foundation.
+
+The most important next step is to introduce **historical point-in-time fundamental data**, after which the project can progress toward rigorous backtesting, walk-forward validation and out-of-sample quantitative research.
+
+---
+
+**FundamentalAlphaForge**
+
+```text
+Market Data
+    ↓
+Market Factors
+    ↓
+Fundamental Factors
+    ↓
+Data Quality
+    ↓
+Confidence
+    ↓
+Research Score
+    ↓
+Ranking
+    ↓
+Dashboard
+    ↓
+Point-in-Time Research
+    ↓
+Backtesting
+    ↓
+Validation
+```

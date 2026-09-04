@@ -17,10 +17,8 @@ The engine:
 3. Downloads 2 years of daily OHLCV data.
 4. Calculates market factors.
 5. Calculates market scores.
-6. Downloads current fundamental information from BSE/NSE through the
-   Dalal package and supplements YoY growth with yfinance where available.
-7. Calculates Quality, Growth and Valuation scores using only factors
-   that Dalal provides with validated semantics.
+6. Downloads fundamental information from Yahoo Finance via yfinance.
+7. Calculates Quality, Growth and Valuation scores.
 8. Calculates fundamental data completeness.
 9. Calculates fundamental confidence.
 10. Calculates Combined Research Score.
@@ -29,49 +27,60 @@ The engine:
 13. Builds an Excel Dashboard with visual statistics.
 14. Reports complete program runtime with timestamps.
 
-DALAL FUNDAMENTAL METHODOLOGY
------------------------------
+IMPORTANT FUNDAMENTAL METHODOLOGY
+---------------------------------
 
-The primary fundamental source is Dalal, which accesses NSE/BSE market data
-without requiring an API key. Dalal supplies Quality, QoQ Growth and Valuation.
-yfinance is used only as a supplementary source for YoY Growth where available.
+The fundamental model deliberately does NOT treat missing values as zero.
 
-The current Dalal model uses the following supported fields:
+Missing values remain NaN.
+
+The model uses available information while separately tracking
+data completeness and confidence.
 
 QUALITY
+-------
+
+Current Quality factors:
+
     ROE
-    Net Profit Margin (NPM)
-    Operating Profit Margin (OPM)
+    ROA
+    Debt / Equity
+    Profit Margin
+    Operating Margin
+    Gross Margin
+    Current Ratio
+    Quick Ratio
+    Free Cash Flow
 
 GROWTH
-    QoQ Revenue Growth
-    QoQ Net Profit Growth
-    QoQ EPS Growth
-    YoY Revenue Growth
-    YoY Net Profit Growth
-    YoY EPS Growth
+------
+
+Current Growth factors:
+
+    Revenue Growth
+    Earnings Growth
+    Quarterly Revenue Growth
+
+IMPORTANT:
+
+Yahoo's earningsQuarterlyGrowth is NOT treated as EPS Growth.
 
 VALUATION
+---------
+
+Current Valuation factors:
+
     P/E
+    Forward P/E
     P/B
+    PEG
+    Price / Sales
+    EV / EBITDA
 
-The underlying Dalal fundamentals endpoint supplies Revenue, Net Profit and
-EPS for the latest quarter, previous quarter and latest financial year. Those
-raw values are retained in the Research Data sheet for transparency.
+DATA COVERAGE
+-------------
 
-QoQ growth is calculated directly from Dalal's current-quarter and
-previous-quarter values. YoY Revenue/Earnings Growth use yfinance's available
-1-year growth fields, while YoY EPS is calculated from yfinance quarterly EPS
-when the required comparison is available. Quality and valuation remain Dalal-based.
-Forward valuation, free cash flow, leverage, liquidity ratios and
-enterprise-value multiples are not fabricated.
-
-MISSING DATA
-------------
-
-Missing values remain NaN and are never converted to zero.
-Weighted scores renormalize across the available factors.
-Completeness is calculated independently from the score.
+The engine reports actual coverage for every fundamental factor.
 
 CONFIDENCE
 ----------
@@ -85,15 +94,18 @@ Medium:
 Low:
     < 60%
 
-Low-confidence stocks are excluded from the headline Fundamental and
-Combined rankings but remain in the Excel Research Data sheet.
+Low-confidence stocks are excluded from the displayed Fundamental
+and Combined headline rankings.
+
+They remain in the Excel Research Data sheet.
 
 CURRENT RESEARCH VS BACKTESTING
 -------------------------------
 
-Dalal fundamental information represents currently available/latest
-reported market and financial information. It is NOT a complete
-point-in-time historical fundamental database.
+Current Yahoo Finance fundamental information represents currently
+available/latest information.
+
+It is NOT a complete point-in-time historical fundamental database.
 
 Therefore:
 
@@ -102,20 +114,14 @@ Therefore:
     HISTORICAL FUNDAMENTAL BACKTEST = NOT YET VALID
 
 Before using fundamentals inside historical VectorBT testing,
-financial-statement reporting/availability dates must be handled to
-prevent look-ahead bias.
-
-The market-data layer continues to use trade_data.py. This file does
-not modify trade_data.py.
+financial statement reporting/availability dates must be handled
+to prevent look-ahead bias.
 """
-
 
 from __future__ import annotations
 
-import html
 import importlib.util
 import io
-import re
 import sys
 import time
 from contextlib import redirect_stdout
@@ -125,10 +131,7 @@ from typing import Optional
 
 import numpy as np
 import pandas as pd
-import requests
 import yfinance as yf
-
-from dalal import Dalal
 
 from openpyxl import load_workbook
 from openpyxl.chart import (
@@ -169,7 +172,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 UNIVERSE_FILE = PROJECT_ROOT / "universe.py"
 
-RESULTS_DIR = Path(__file__).resolve().parent / "results"
+RESULTS_DIR = PROJECT_ROOT / "results"
 
 
 # ============================================================
@@ -201,18 +204,9 @@ AVERAGE_VOLUME_DAYS = 20
 # FUNDAMENTAL PARAMETERS
 # ============================================================
 
-# Dalal accesses NSE/BSE data without requiring an API key.
-FUNDAMENTAL_SLEEP_SECONDS = 0.10
+FUNDAMENTAL_SLEEP_SECONDS = 0.05
 
 FUNDAMENTAL_PROGRESS_INTERVAL = 25
-
-BSE_LOOKUP_TIMEOUT_SECONDS = 15
-
-DALAL_MAX_LOOKUP_CANDIDATES = 8
-
-DALAL_RETRY_COUNT = 3
-
-DALAL_RETRY_SLEEP_SECONDS = 1.0
 
 
 # ============================================================
@@ -230,23 +224,31 @@ MEDIUM_CONFIDENCE_COMPLETENESS = 60.0
 
 ALL_FUNDAMENTAL_FACTORS = [
 
-    # Quality — Dalal / BSE
+    # Quality
     "roe",
+    "roa",
+    "debt_equity",
     "profit_margin",
     "operating_margin",
+    "gross_margin",
+    "current_ratio",
+    "quick_ratio",
+    "free_cash_flow",
 
-    # Growth — Dalal QoQ + yfinance YoY
-    "qoq_revenue_growth",
-    "qoq_net_profit_growth",
-    "qoq_eps_growth",
-    "yoy_revenue_growth",
-    "yoy_net_profit_growth",
-    "yoy_eps_growth",
+    # Growth
+    "revenue_growth",
+    "earnings_growth",
+    "quarterly_revenue_growth",
 
-    # Valuation — Dalal / BSE
+    # Valuation
     "pe",
+    "forward_pe",
     "price_book",
+    "peg",
+    "price_sales",
+    "ev_ebitda",
 ]
+
 
 TOTAL_FUNDAMENTAL_FACTORS = len(
     ALL_FUNDAMENTAL_FACTORS
@@ -261,50 +263,67 @@ FUNDAMENTAL_FACTOR_GROUPS = {
 
     "quality": [
         "roe",
+        "roa",
+        "debt_equity",
         "profit_margin",
         "operating_margin",
+        "gross_margin",
+        "current_ratio",
+        "quick_ratio",
+        "free_cash_flow",
     ],
 
     "growth": [
-        "qoq_revenue_growth",
-        "qoq_net_profit_growth",
-        "qoq_eps_growth",
-        "yoy_revenue_growth",
-        "yoy_net_profit_growth",
-        "yoy_eps_growth",
+        "revenue_growth",
+        "earnings_growth",
+        "quarterly_revenue_growth",
     ],
 
     "valuation": [
         "pe",
+        "forward_pe",
         "price_book",
+        "peg",
+        "price_sales",
+        "ev_ebitda",
     ],
 }
 
 
 # ============================================================
-# FACTOR WEIGHTS
+# FUNDAMENTAL FACTOR WEIGHTS
 # ============================================================
 
 QUALITY_FACTOR_WEIGHTS = {
-    "roe": 0.40,
-    "profit_margin": 0.30,
-    "operating_margin": 0.30,
+
+    "roe": 0.20,
+    "roa": 0.10,
+    "debt_equity": 0.15,
+    "profit_margin": 0.10,
+    "operating_margin": 0.10,
+    "gross_margin": 0.05,
+    "current_ratio": 0.05,
+    "quick_ratio": 0.05,
+    "free_cash_flow": 0.20,
 }
 
-# Growth = 40% QoQ + 60% YoY.
-# Within each subgroup: Revenue 40%, Net Profit 35%, EPS 25%.
+
 GROWTH_FACTOR_WEIGHTS = {
-    "qoq_revenue_growth": 0.16,
-    "qoq_net_profit_growth": 0.14,
-    "qoq_eps_growth": 0.10,
-    "yoy_revenue_growth": 0.24,
-    "yoy_net_profit_growth": 0.21,
-    "yoy_eps_growth": 0.15,
+
+    "revenue_growth": 0.40,
+    "earnings_growth": 0.40,
+    "quarterly_revenue_growth": 0.20,
 }
+
 
 VALUATION_FACTOR_WEIGHTS = {
-    "pe": 0.60,
-    "price_book": 0.40,
+
+    "pe": 0.20,
+    "forward_pe": 0.15,
+    "price_book": 0.10,
+    "peg": 0.10,
+    "price_sales": 0.20,
+    "ev_ebitda": 0.25,
 }
 
 
@@ -314,17 +333,37 @@ VALUATION_FACTOR_WEIGHTS = {
 
 QUALITY_WEIGHTS = {
     f"score_{factor}": weight
-    for factor, weight in QUALITY_FACTOR_WEIGHTS.items()
+    for factor, weight
+    in QUALITY_FACTOR_WEIGHTS.items()
 }
+
 
 GROWTH_WEIGHTS = {
     f"score_{factor}": weight
-    for factor, weight in GROWTH_FACTOR_WEIGHTS.items()
+    for factor, weight
+    in GROWTH_FACTOR_WEIGHTS.items()
 }
 
+
 VALUATION_WEIGHTS = {
-    f"score_{factor}": weight
-    for factor, weight in VALUATION_FACTOR_WEIGHTS.items()
+
+    "score_pe":
+        VALUATION_FACTOR_WEIGHTS["pe"],
+
+    "score_forward_pe":
+        VALUATION_FACTOR_WEIGHTS["forward_pe"],
+
+    "score_pb":
+        VALUATION_FACTOR_WEIGHTS["price_book"],
+
+    "score_peg":
+        VALUATION_FACTOR_WEIGHTS["peg"],
+
+    "score_price_sales":
+        VALUATION_FACTOR_WEIGHTS["price_sales"],
+
+    "score_ev_ebitda":
+        VALUATION_FACTOR_WEIGHTS["ev_ebitda"],
 }
 
 
@@ -333,9 +372,12 @@ VALUATION_WEIGHTS = {
 # ============================================================
 
 FUNDAMENTAL_WEIGHTS = {
+
     "quality_score": 0.35,
-    "growth_score": 0.45,
-    "valuation_score": 0.20,
+
+    "growth_score": 0.35,
+
+    "valuation_score": 0.30,
 }
 
 
@@ -344,7 +386,9 @@ FUNDAMENTAL_WEIGHTS = {
 # ============================================================
 
 COMBINED_RESEARCH_WEIGHTS = {
+
     "market_research_score": 0.50,
+
     "fundamental_score": 0.50,
 }
 
@@ -1526,430 +1570,19 @@ def calculate_market_research_score(
 
 
 # ============================================================
-# FUNDAMENTAL HELPERS — DALAL / BSE
+# FUNDAMENTAL HELPERS
 # ============================================================
 
-_DALAL_CLIENT = None
-_BSE_SESSION = None
-_BSE_LOOKUP_CACHE: dict[str, list[dict]] = {}
-_YAHOO_FUNDAMENTAL_CACHE: dict[str, dict] = {}
-_YAHOO_SESSION = None
-
-
-def get_dalal_client() -> Dalal:
-    """Create the Dalal client once and reuse it for the full run."""
-
-    global _DALAL_CLIENT
-
-    if _DALAL_CLIENT is None:
-        _DALAL_CLIENT = Dalal()
-
-    return _DALAL_CLIENT
-
-
-def get_yahoo_session() -> requests.Session:
-    """Create a reusable Yahoo Finance HTTP session."""
-
-    global _YAHOO_SESSION
-
-    if _YAHOO_SESSION is None:
-
-        _YAHOO_SESSION = requests.Session()
-
-        _YAHOO_SESSION.headers.update(
-            {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/142.0 Safari/537.36"
-                ),
-                "Accept": "application/json, text/plain, */*",
-                "Referer": "https://finance.yahoo.com/",
-            }
-        )
-
-    return _YAHOO_SESSION
-
-
-def get_bse_session() -> requests.Session:
-    """Create a reusable BSE HTTP session."""
-
-    global _BSE_SESSION
-
-    if _BSE_SESSION is None:
-
-        _BSE_SESSION = requests.Session()
-
-        _BSE_SESSION.headers.update(
-            {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/142.0 Safari/537.36"
-                ),
-                "Accept": "application/json, text/plain, */*",
-                "Referer": "https://www.bseindia.com/",
-                "Origin": "https://www.bseindia.com",
-            }
-        )
-
-    return _BSE_SESSION
-
-
-def normalize_bse_search_symbol(
-    symbol: str,
-) -> str:
-    """Convert an NSE/Yahoo symbol such as RELIANCE.NS to BSE search text."""
-
-    value = str(symbol).strip().upper()
-
-    if value.endswith(".NS"):
-        value = value[:-3]
-
-    return value
-
-
-def normalize_security_token(
-    value,
-) -> str:
-    """Normalize symbols/security IDs for robust comparison."""
-
-    if value is None:
-        return ""
-
-    value = str(value).upper().strip()
-
-    value = value.replace(".NS", "")
-
-    return re.sub(
-        r"[^A-Z0-9]",
-        "",
-        value,
-    )
-
-
-def parse_bse_lookup_candidates(
-    response_payload,
-) -> list[dict]:
-    """Parse BSE PeerSmartSearch response into candidate scrip records."""
-
-    if isinstance(response_payload, str):
-        text = response_payload
-
-    elif isinstance(response_payload, dict):
-        text = ""
-
-        for key in ("d", "data", "result", "response"):
-
-            value = response_payload.get(key)
-
-            if isinstance(value, str):
-                text = value
-                break
-
-    else:
-        text = ""
-
-    if not text:
-        return []
-
-    text = html.unescape(text)
-
-    # BSE returns HTML as a JSON string. Each result contains a
-    # liclick('BSECODE','COMPANY NAME') handler.
-    matches = re.findall(
-        r"liclick\(\s*['\"](\d{6})['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)",
-        text,
-        flags=re.IGNORECASE,
-    )
-
-    candidates = []
-
-    seen_codes = set()
-
-    for code, company_name in matches:
-
-        if code in seen_codes:
-            continue
-
-        seen_codes.add(code)
-
-        # Locate the nearest <li> around this liclick entry so that
-        # the displayed BSE security symbol can also be captured.
-        marker = re.escape(
-            f"liclick('{code}','{company_name}')"
-        )
-
-        li_match = re.search(
-            rf"<li[^>]*{marker}.*?</li>",
-            text,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-
-        displayed_symbol = ""
-
-        if li_match:
-
-            strong_match = re.search(
-                r"<strong>\s*(.*?)\s*</strong>",
-                li_match.group(0),
-                flags=re.IGNORECASE | re.DOTALL,
-            )
-
-            if strong_match:
-                displayed_symbol = re.sub(
-                    r"\s+",
-                    " ",
-                    html.unescape(
-                        strong_match.group(1)
-                    ),
-                ).strip()
-
-        candidates.append(
-            {
-                "bse_code": code,
-                "company_name": company_name.strip(),
-                "security_symbol": displayed_symbol,
-            }
-        )
-
-    return candidates
-
-
-def lookup_bse_candidates(
-    symbol: str,
-) -> list[dict]:
-    """Search BSE for all candidate securities for an NSE symbol."""
-
-    search_symbol = normalize_bse_search_symbol(symbol)
-
-    if not search_symbol:
-        return []
-
-    if search_symbol in _BSE_LOOKUP_CACHE:
-        return _BSE_LOOKUP_CACHE[search_symbol]
-
-    url = (
-        "https://api.bseindia.com/"
-        "BseIndiaAPI/api/PeerSmartSearch/w"
-    )
-
-    session = get_bse_session()
-
-    for attempt in range(
-        1,
-        DALAL_RETRY_COUNT + 1,
-    ):
-
-        try:
-
-            response = session.get(
-                url,
-                params={
-                    "Type": "SS",
-                    "text": search_symbol,
-                },
-                timeout=BSE_LOOKUP_TIMEOUT_SECONDS,
-            )
-
-            response.raise_for_status()
-
-            try:
-                payload = response.json()
-
-            except ValueError:
-                payload = response.text
-
-            candidates = parse_bse_lookup_candidates(
-                payload
-            )
-
-            _BSE_LOOKUP_CACHE[search_symbol] = candidates
-
-            return candidates
-
-        except Exception as error:
-
-            if attempt >= DALAL_RETRY_COUNT:
-
-                print(
-                    f"WARNING: BSE lookup failed for "
-                    f"{symbol}: {error}"
-                )
-
-                _BSE_LOOKUP_CACHE[search_symbol] = []
-
-                return []
-
-            time.sleep(
-                DALAL_RETRY_SLEEP_SECONDS * attempt
-            )
-
-    return []
-
-
-def select_bse_candidate(
-    symbol: str,
-    candidates: list[dict],
-    dalal_client: Dalal,
-) -> Optional[dict]:
-    """
-    Select the most reliable BSE mapping.
-
-    The important robustness check is SecurityId from Dalal meta().
-    This prevents ambiguous searches such as MARUTI from accidentally
-    mapping to MARUTI GLOBAL INDUSTRIES instead of MARUTI.
-    """
-
-    if not candidates:
-        return None
-
-    target = normalize_security_token(symbol)
-
-    # First try the displayed security symbol without extra API calls.
-    exact_symbol_candidates = [
-        candidate
-        for candidate in candidates
-        if normalize_security_token(
-            candidate.get("security_symbol")
-        ) == target
-    ]
-
-    candidates_to_validate = (
-        exact_symbol_candidates
-        if exact_symbol_candidates
-        else candidates
-    )[:DALAL_MAX_LOOKUP_CANDIDATES]
-
-    # Validate candidate using Dalal meta(). SecurityId is the strongest
-    # identifier available from the package for this mapping task.
-    for candidate in candidates_to_validate:
-
-        code = candidate.get("bse_code")
-
-        if not code:
-            continue
-
-        try:
-
-            meta = dalal_client.meta(code)
-
-            if isinstance(meta, dict):
-
-                security_id = meta.get(
-                    "SecurityId"
-                )
-
-                if (
-                    normalize_security_token(
-                        security_id
-                    ) == target
-                ):
-
-                    validated = dict(candidate)
-
-                    validated["meta_security_id"] = (
-                        security_id
-                    )
-
-                    return validated
-
-        except Exception:
-            continue
-
-    # If BSE explicitly returned an exact displayed symbol but Dalal's
-    # meta endpoint did not expose a matching SecurityId, use the exact
-    # displayed symbol rather than silently inventing a different match.
-    if exact_symbol_candidates:
-        return exact_symbol_candidates[0]
-
-    return candidates[0]
-
-
-def extract_dalal_period_value(
-    fundamentals: dict,
-    title: str,
-    position: int = 0,
-) -> float:
-    """Extract one numeric value from Dalal resultinCr by title and position."""
-
-    rows = fundamentals.get(
-        "resultinCr",
-        [],
-    )
-
-    if not isinstance(rows, list):
-        return np.nan
-
-    for row in rows:
-
-        if not isinstance(row, dict):
-            continue
-
-        if str(row.get("title", "")).strip().lower() != title.lower():
-            continue
-
-        values = []
-
-        for key in (
-            "v1",
-            "v2",
-            "v3",
-        ):
-
-            value = safe_float(
-                str(row.get(key, "")).replace(",", "")
-            )
-
-            values.append(value)
-
-        if 0 <= position < len(values):
-            return values[position]
-
-    return np.nan
-
-
-def calculate_growth(
-    current: float,
-    previous: float,
-) -> float:
-    """Calculate percentage growth from a current value to a previous value."""
-
-    current = safe_float(current)
-    previous = safe_float(previous)
-
-    if (
-        pd.isna(current)
-        or pd.isna(previous)
-        or previous <= 0
-    ):
-        return np.nan
-
-    return (
-        (current - previous)
-        / previous
-        * 100.0
-    )
-
-
-# Backward-compatible alias for any internal references.
-calculate_yoy_growth = calculate_growth
-
-
-_YFINANCE_GROWTH_CACHE: dict[str, dict] = {}
-
-
-def _get_yfinance_info_value(
+def get_info_value(
     info: dict,
     keys: list[str],
 ) -> float:
-    """Return the first usable numeric value from a list of yfinance keys."""
 
     for key in keys:
-        if key not in info:
-            continue
 
-        value = safe_float(info.get(key))
+        value = info.get(key)
+
+        value = safe_float(value)
 
         if pd.notna(value):
             return value
@@ -1957,446 +1590,331 @@ def _get_yfinance_info_value(
     return np.nan
 
 
-def _normalize_yfinance_growth(
+def normalize_percentage(
     value: float,
 ) -> float:
-    """Convert yfinance decimal growth values to percentages."""
 
     value = safe_float(value)
 
     if pd.isna(value):
         return np.nan
 
-    # yfinance info growth fields are normally decimal fractions, e.g. 0.15.
-    # If a provider response is already expressed as a percentage, retain it.
-    if abs(value) <= 5:
-        return value * 100.0
+    if abs(value) <= 1:
+        return value * 100
 
     return value
 
 
-def _find_statement_row(
-    statement: pd.DataFrame,
-    candidates: list[str],
-) -> Optional[str]:
-    """Find a statement row using normalized names."""
+def normalize_ratio(
+    value: float,
+) -> float:
 
-    if statement is None or statement.empty:
-        return None
+    value = safe_float(value)
 
-    normalized = {
-        re.sub(r"[^a-z0-9]", "", str(index).lower()): index
-        for index in statement.index
-    }
+    if pd.isna(value):
+        return np.nan
 
-    for candidate in candidates:
-        key = re.sub(
-            r"[^a-z0-9]",
-            "",
-            candidate.lower(),
-        )
-
-        if key in normalized:
-            return normalized[key]
-
-    return None
+    return value
 
 
-def _extract_yfinance_eps_yoy(
-    ticker: yf.Ticker,
-) -> tuple[float, float, Optional[pd.Timestamp], Optional[pd.Timestamp]]:
-    """Calculate actual quarterly EPS YoY from yfinance quarterly income data."""
+# ============================================================
+# FUNDAMENTAL DATA
+# ============================================================
 
-    try:
-        statement = ticker.quarterly_income_stmt
-
-        if statement is None or statement.empty:
-            return np.nan, np.nan, None, None
-
-        row_name = _find_statement_row(
-            statement,
-            [
-                "Diluted EPS",
-                "Basic EPS",
-                "DilutedEPS",
-                "BasicEPS",
-            ],
-        )
-
-        if row_name is None:
-            return np.nan, np.nan, None, None
-
-        series = pd.to_numeric(
-            statement.loc[row_name],
-            errors="coerce",
-        ).dropna()
-
-        if series.empty:
-            return np.nan, np.nan, None, None
-
-        observations = []
-
-        for date_value, value in series.items():
-            date = pd.to_datetime(
-                date_value,
-                errors="coerce",
-            )
-
-            numeric = safe_float(value)
-
-            if pd.notna(date) and pd.notna(numeric):
-                observations.append((date, numeric))
-
-        observations.sort(
-            key=lambda item: item[0],
-            reverse=True,
-        )
-
-        if not observations:
-            return np.nan, np.nan, None, None
-
-        current_date, current_value = observations[0]
-
-        prior_candidates = []
-
-        for date, value in observations[1:]:
-            days = abs((current_date - date).days - 365)
-            if days <= 70:
-                prior_candidates.append((days, date, value))
-
-        if not prior_candidates:
-            return current_value, np.nan, current_date, None
-
-        prior_candidates.sort(key=lambda item: item[0])
-        _, prior_date, prior_value = prior_candidates[0]
-
-        return (
-            current_value,
-            prior_value,
-            current_date,
-            prior_date,
-        )
-
-    except Exception:
-        return np.nan, np.nan, None, None
-
-
-def fetch_yfinance_yoy_growth(
+def fetch_fundamental_data(
     symbol: str,
-) -> dict:
+) -> Optional[dict]:
+
     """
-    Fetch YoY growth using yfinance's available fundamental information.
+    Fetch current/latest fundamental information through yfinance.
 
-    Revenue and earnings use yfinance's 1-year growth fields where available.
-    EPS YoY is calculated from quarterly income-statement EPS when available.
-    This deliberately avoids Yahoo's raw fundamentals-timeseries endpoint.
-    Missing values remain NaN.
+    Missing values are NOT converted to zero.
+
+    EPS growth is deliberately NOT fetched from
+    earningsQuarterlyGrowth.
     """
-
-    symbol = str(symbol).strip().upper()
-
-    if not symbol:
-        return {}
-
-    if symbol in _YFINANCE_GROWTH_CACHE:
-        return _YFINANCE_GROWTH_CACHE[symbol]
-
-    result = {
-        "yoy_revenue_growth": np.nan,
-        "yoy_net_profit_growth": np.nan,
-        "yoy_eps_growth": np.nan,
-        "yoy_source": "yfinance growth fields / quarterly EPS",
-        "yoy_revenue_raw": np.nan,
-        "yoy_earnings_raw": np.nan,
-        "yoy_eps_current": np.nan,
-        "yoy_eps_prior_year": np.nan,
-        "yoy_eps_current_period": None,
-        "yoy_eps_prior_year_period": None,
-    }
 
     try:
+
         ticker = yf.Ticker(symbol)
-        info = ticker.get_info() if hasattr(ticker, "get_info") else ticker.info
+
+        info = ticker.info
 
         if not isinstance(info, dict):
-            info = {}
+            return None
 
-        revenue_growth = _get_yfinance_info_value(
+        # ====================================================
+        # QUALITY
+        # ====================================================
+
+        roe = get_info_value(
+            info,
+            ["returnOnEquity"],
+        )
+
+        roa = get_info_value(
+            info,
+            ["returnOnAssets"],
+        )
+
+        debt_equity = get_info_value(
+            info,
+            ["debtToEquity"],
+        )
+
+        profit_margin = get_info_value(
+            info,
+            ["profitMargins"],
+        )
+
+        operating_margin = get_info_value(
+            info,
+            ["operatingMargins"],
+        )
+
+        gross_margin = get_info_value(
+            info,
+            ["grossMargins"],
+        )
+
+        current_ratio = get_info_value(
+            info,
+            ["currentRatio"],
+        )
+
+        quick_ratio = get_info_value(
+            info,
+            ["quickRatio"],
+        )
+
+        free_cash_flow = get_info_value(
+            info,
+            ["freeCashflow"],
+        )
+
+        if (
+            pd.notna(debt_equity)
+            and debt_equity > 10
+        ):
+
+            debt_equity = (
+                debt_equity / 100
+            )
+
+        # ====================================================
+        # GROWTH
+        # ====================================================
+
+        revenue_growth = get_info_value(
             info,
             ["revenueGrowth"],
         )
 
-        earnings_growth = _get_yfinance_info_value(
+        earnings_growth = get_info_value(
             info,
             ["earningsGrowth"],
         )
 
-        result["yoy_revenue_raw"] = revenue_growth
-        result["yoy_earnings_raw"] = earnings_growth
+        quarterly_revenue_growth = get_info_value(
+            info,
+            ["revenueQuarterlyGrowth"],
+        )
 
-        result["yoy_revenue_growth"] = _normalize_yfinance_growth(
+        revenue_growth = normalize_percentage(
             revenue_growth
         )
 
-        result["yoy_net_profit_growth"] = _normalize_yfinance_growth(
+        earnings_growth = normalize_percentage(
             earnings_growth
         )
 
-        (
-            eps_current,
-            eps_prior,
-            current_period,
-            prior_period,
-        ) = _extract_yfinance_eps_yoy(ticker)
-
-        result["yoy_eps_current"] = eps_current
-        result["yoy_eps_prior_year"] = eps_prior
-        result["yoy_eps_current_period"] = (
-            current_period.strftime("%Y-%m-%d")
-            if current_period is not None
-            else None
-        )
-        result["yoy_eps_prior_year_period"] = (
-            prior_period.strftime("%Y-%m-%d")
-            if prior_period is not None
-            else None
-        )
-
-        result["yoy_eps_growth"] = calculate_growth(
-            eps_current,
-            eps_prior,
-        )
-
-    except Exception as error:
-        result["yoy_error"] = str(error)
-
-    _YFINANCE_GROWTH_CACHE[symbol] = result
-
-    return result
-
-
-def fetch_dalal_fundamental_data(
-    symbol: str,
-) -> Optional[dict]:
-    """Fetch current fundamentals through Dalal and supplement YoY via yfinance."""
-
-    dalal_client = get_dalal_client()
-
-    candidates = lookup_bse_candidates(symbol)
-
-    if not candidates:
-        return None
-
-    selected = select_bse_candidate(
-        symbol,
-        candidates,
-        dalal_client,
-    )
-
-    if selected is None:
-        return None
-
-    bse_code = selected.get("bse_code")
-
-    if not bse_code:
-        return None
-
-    fundamentals = None
-    meta = None
-    last_error = None
-
-    for attempt in range(
-        1,
-        DALAL_RETRY_COUNT + 1,
-    ):
-        try:
-            fundamentals = dalal_client.fundamentals(bse_code)
-            meta = dalal_client.meta(bse_code)
-            break
-        except Exception as error:
-            last_error = error
-            if attempt < DALAL_RETRY_COUNT:
-                time.sleep(
-                    DALAL_RETRY_SLEEP_SECONDS * attempt
-                )
-
-    if not isinstance(fundamentals, dict):
-        fundamentals = {}
-
-    if not isinstance(meta, dict):
-        meta = {}
-
-    if not fundamentals and not meta:
-        if last_error is not None:
-            print(
-                f"WARNING: Dalal fundamentals/meta failed for "
-                f"{symbol} ({bse_code}): {last_error}"
+        quarterly_revenue_growth = (
+            normalize_percentage(
+                quarterly_revenue_growth
             )
+        )
+
+        # ====================================================
+        # VALUATION
+        # ====================================================
+
+        pe = get_info_value(
+            info,
+            ["trailingPE"],
+        )
+
+        forward_pe = get_info_value(
+            info,
+            ["forwardPE"],
+        )
+
+        price_book = get_info_value(
+            info,
+            ["priceToBook"],
+        )
+
+        peg = get_info_value(
+            info,
+            ["pegRatio"],
+        )
+
+        price_sales = get_info_value(
+            info,
+            ["priceToSalesTrailing12Months"],
+        )
+
+        ev_ebitda = get_info_value(
+            info,
+            ["enterpriseToEbitda"],
+        )
+
+        # ====================================================
+        # ADDITIONAL INFORMATION
+        # ====================================================
+
+        market_cap = get_info_value(
+            info,
+            ["marketCap"],
+        )
+
+        enterprise_value = get_info_value(
+            info,
+            ["enterpriseValue"],
+        )
+
+        return {
+
+            "symbol": symbol,
+
+            # Quality
+            "roe": (
+                roe * 100
+                if pd.notna(roe)
+                else np.nan
+            ),
+
+            "roa": (
+                roa * 100
+                if pd.notna(roa)
+                else np.nan
+            ),
+
+            "debt_equity":
+                debt_equity,
+
+            "profit_margin": (
+                profit_margin * 100
+                if pd.notna(profit_margin)
+                else np.nan
+            ),
+
+            "operating_margin": (
+                operating_margin * 100
+                if pd.notna(operating_margin)
+                else np.nan
+            ),
+
+            "gross_margin": (
+                gross_margin * 100
+                if pd.notna(gross_margin)
+                else np.nan
+            ),
+
+            "current_ratio":
+                current_ratio,
+
+            "quick_ratio":
+                quick_ratio,
+
+            "free_cash_flow":
+                free_cash_flow,
+
+            # Growth
+            "revenue_growth":
+                revenue_growth,
+
+            "earnings_growth":
+                earnings_growth,
+
+            "quarterly_revenue_growth":
+                quarterly_revenue_growth,
+
+            # Valuation
+            "pe":
+                pe,
+
+            "forward_pe":
+                forward_pe,
+
+            "price_book":
+                price_book,
+
+            "peg":
+                peg,
+
+            "price_sales":
+                price_sales,
+
+            "ev_ebitda":
+                ev_ebitda,
+
+            # Additional
+            "market_cap":
+                market_cap,
+
+            "enterprise_value":
+                enterprise_value,
+        }
+
+    except Exception:
+
         return None
 
-    revenue_current = extract_dalal_period_value(
-        fundamentals, "Revenue", 0
-    )
-    revenue_previous = extract_dalal_period_value(
-        fundamentals, "Revenue", 1
-    )
-    net_profit_current = extract_dalal_period_value(
-        fundamentals, "Net Profit", 0
-    )
-    net_profit_previous = extract_dalal_period_value(
-        fundamentals, "Net Profit", 1
-    )
-    eps_current = extract_dalal_period_value(
-        fundamentals, "EPS", 0
-    )
-    eps_previous = extract_dalal_period_value(
-        fundamentals, "EPS", 1
-    )
-    opm_current = extract_dalal_period_value(
-        fundamentals, "OPM %", 0
-    )
-    npm_current = extract_dalal_period_value(
-        fundamentals, "NPM %", 0
-    )
 
-    qoq_revenue_growth = calculate_growth(
-        revenue_current,
-        revenue_previous,
-    )
-    qoq_net_profit_growth = calculate_growth(
-        net_profit_current,
-        net_profit_previous,
-    )
-    qoq_eps_growth = calculate_growth(
-        eps_current,
-        eps_previous,
-    )
-
-    meta_eps = safe_float(meta.get("EPS"))
-    meta_pe = safe_float(meta.get("PE"))
-    meta_roe = safe_float(meta.get("ROE"))
-    meta_pb = safe_float(meta.get("PB"))
-
-    yahoo_yoy = fetch_yfinance_yoy_growth(symbol)
-
-    return {
-        "symbol": symbol,
-
-        # Dalal / BSE identifiers and provenance
-        "bse_code": bse_code,
-        "bse_company_name": selected.get("company_name"),
-        "bse_security_symbol": selected.get("security_symbol"),
-        "dalal_security_id": meta.get("SecurityId"),
-        "fundamental_source": "Dalal / BSE + yfinance YoY growth",
-
-        # Raw current / previous quarter values
-        "fundamental_revenue": revenue_current,
-        "fundamental_revenue_previous_quarter": revenue_previous,
-        "fundamental_net_profit": net_profit_current,
-        "fundamental_net_profit_previous_quarter": net_profit_previous,
-        "fundamental_eps": eps_current,
-        "fundamental_eps_previous_quarter": eps_previous,
-        "fundamental_opm_pct": opm_current,
-        "fundamental_npm_pct": npm_current,
-        "fundamental_period": fundamentals.get("col2"),
-        "fundamental_previous_period": fundamentals.get("col3"),
-        "fundamental_fy_period": fundamentals.get("col4"),
-
-        # Quality — Dalal
-        "roe": meta_roe,
-        "profit_margin": npm_current,
-        "operating_margin": opm_current,
-
-        # QoQ Growth — Dalal
-        "qoq_revenue_growth": qoq_revenue_growth,
-        "qoq_net_profit_growth": qoq_net_profit_growth,
-        "qoq_eps_growth": qoq_eps_growth,
-
-        # YoY Growth — yfinance
-        "yoy_revenue_growth": yahoo_yoy.get(
-            "yoy_revenue_growth", np.nan
-        ),
-        "yoy_net_profit_growth": yahoo_yoy.get(
-            "yoy_net_profit_growth", np.nan
-        ),
-        "yoy_eps_growth": yahoo_yoy.get(
-            "yoy_eps_growth", np.nan
-        ),
-
-        # Valuation — Dalal
-        "pe": meta_pe,
-        "price_book": meta_pb,
-
-        # Transparency
-        "meta_eps": meta_eps,
-        "yoy_source": yahoo_yoy.get(
-            "yoy_source",
-            "yfinance growth fields / quarterly EPS",
-        ),
-        "yoy_revenue_raw": yahoo_yoy.get(
-            "yoy_revenue_raw", np.nan
-        ),
-        "yoy_earnings_raw": yahoo_yoy.get(
-            "yoy_earnings_raw", np.nan
-        ),
-        "yoy_eps_current": yahoo_yoy.get(
-            "yoy_eps_current", np.nan
-        ),
-        "yoy_eps_prior_year": yahoo_yoy.get(
-            "yoy_eps_prior_year", np.nan
-        ),
-        "yoy_eps_current_period": yahoo_yoy.get(
-            "yoy_eps_current_period"
-        ),
-        "yoy_eps_prior_year_period": yahoo_yoy.get(
-            "yoy_eps_prior_year_period"
-        ),
-    }
-
+# ============================================================
+# FUNDAMENTAL COLLECTION
+# ============================================================
 
 def build_fundamental_dataframe(
     symbols: list[str],
 ) -> pd.DataFrame:
-    """Fetch Dalal fundamentals for the complete Nifty 500 universe."""
 
     print_header(
         "DOWNLOADING FUNDAMENTAL DATA"
     )
 
     print(
-        "Source : Dalal / BSE + yfinance YoY growth"
+        "Source : Yahoo Finance via yfinance"
     )
 
     print()
 
     print(
-        "Dalal fundamental model:"
+        "Expanded fundamental model:"
     )
 
     print(
-        "Quality : ROE, Net Profit Margin, "
-        "Operating Profit Margin"
+        "Quality : ROE, ROA, D/E, "
+        "Profit Margin, Operating Margin, "
+        "Gross Margin, Current Ratio, "
+        "Quick Ratio, Free Cash Flow"
     )
 
     print(
-        "Growth  : QoQ Revenue Growth, QoQ Net Profit Growth, "
-        "QoQ EPS Growth, YoY Revenue Growth, YoY Net Profit Growth, "
-        "YoY EPS Growth"
+        "Growth  : Revenue Growth, "
+        "Earnings Growth, "
+        "Quarterly Revenue Growth"
     )
 
     print(
-        "Value   : P/E, P/B"
+        "Value   : P/E, Forward P/E, P/B, "
+        "PEG, Price/Sales, EV/EBITDA"
     )
 
     print()
 
     print(
-        "Unsupported factors are NOT fabricated."
-    )
-
-    print(
-        "QoQ growth uses Dalal current quarter vs previous quarter. "
-        "YoY growth uses yfinance fields / quarterly EPS where available."
+        "EPS Growth proxy has been REMOVED."
     )
 
     print(
@@ -2409,17 +1927,13 @@ def build_fundamental_dataframe(
 
     total = len(symbols)
 
-    bse_mapped = 0
-    fundamentals_available = 0
-    meta_available = 0
-
     for index, symbol in enumerate(
         symbols,
         start=1,
     ):
 
-        fundamentals = fetch_dalal_fundamental_data(
-            symbol
+        fundamentals = (
+            fetch_fundamental_data(symbol)
         )
 
         if fundamentals is not None:
@@ -2428,36 +1942,6 @@ def build_fundamental_dataframe(
                 fundamentals
             )
 
-            if fundamentals.get("bse_code"):
-                bse_mapped += 1
-
-            if any(
-                pd.notna(
-                    fundamentals.get(field)
-                )
-                for field in (
-                    "fundamental_revenue",
-                    "fundamental_net_profit",
-                    "fundamental_eps",
-                    "fundamental_opm_pct",
-                    "fundamental_npm_pct",
-                )
-            ):
-                fundamentals_available += 1
-
-            if any(
-                pd.notna(
-                    fundamentals.get(field)
-                )
-                for field in (
-                    "meta_eps",
-                    "pe",
-                    "roe",
-                    "price_book",
-                )
-            ):
-                meta_available += 1
-
         if (
             index % FUNDAMENTAL_PROGRESS_INTERVAL == 0
             or index == total
@@ -2465,10 +1949,7 @@ def build_fundamental_dataframe(
 
             print(
                 f"Fundamentals processed "
-                f"{index:,} / {total:,} | "
-                f"BSE mapped: {bse_mapped:,} | "
-                f"Fundamentals: {fundamentals_available:,} | "
-                f"Meta: {meta_available:,}"
+                f"{index:,} / {total:,}"
             )
 
         if FUNDAMENTAL_SLEEP_SECONDS > 0:
@@ -2480,43 +1961,37 @@ def build_fundamental_dataframe(
     if not records:
 
         print(
-            "WARNING: No Dalal fundamental data was retrieved."
+            "WARNING: No fundamental data was retrieved."
         )
 
         return pd.DataFrame(
             columns=[
+
                 "symbol",
-                *ALL_FUNDAMENTAL_FACTORS,
-                "bse_code",
-                "bse_company_name",
-                "bse_security_symbol",
-                "dalal_security_id",
-                "fundamental_source",
-                "fundamental_revenue",
-                "fundamental_revenue_previous_quarter",
-                "fundamental_net_profit",
-                "fundamental_net_profit_previous_quarter",
-                "fundamental_eps",
-                "fundamental_eps_previous_quarter",
-                "fundamental_opm_pct",
-                "fundamental_npm_pct",
-                "fundamental_period",
-                "fundamental_previous_period",
-                "fundamental_fy_period",
-                "meta_eps",
-                "qoq_revenue_growth",
-                "qoq_net_profit_growth",
-                "qoq_eps_growth",
-                "yoy_revenue_growth",
-                "yoy_net_profit_growth",
-                "yoy_eps_growth",
-                "yoy_source",
-                "yoy_revenue_raw",
-                "yoy_earnings_raw",
-                "yoy_eps_current",
-                "yoy_eps_prior_year",
-                "yoy_eps_current_period",
-                "yoy_eps_prior_year_period",
+
+                "roe",
+                "roa",
+                "debt_equity",
+                "profit_margin",
+                "operating_margin",
+                "gross_margin",
+                "current_ratio",
+                "quick_ratio",
+                "free_cash_flow",
+
+                "revenue_growth",
+                "earnings_growth",
+                "quarterly_revenue_growth",
+
+                "pe",
+                "forward_pe",
+                "price_book",
+                "peg",
+                "price_sales",
+                "ev_ebitda",
+
+                "market_cap",
+                "enterprise_value",
             ]
         )
 
@@ -2527,23 +2002,8 @@ def build_fundamental_dataframe(
     print()
 
     print(
-        f"Stocks with Dalal + yfinance fundamental data: "
+        f"Stocks with fundamental data: "
         f"{len(fundamentals_df):,}"
-    )
-
-    print(
-        f"BSE mappings resolved            : "
-        f"{bse_mapped:,}"
-    )
-
-    print(
-        f"Fundamental payloads available   : "
-        f"{fundamentals_available:,}"
-    )
-
-    print(
-        f"Meta payloads available          : "
-        f"{meta_available:,}"
     )
 
     return fundamentals_df
@@ -2951,6 +2411,16 @@ def calculate_quality_score(
         higher_is_better=True,
     )
 
+    df["score_roa"] = percentile_score(
+        df["roa"],
+        higher_is_better=True,
+    )
+
+    df["score_debt_equity"] = percentile_score(
+        df["debt_equity"],
+        higher_is_better=False,
+    )
+
     df["score_profit_margin"] = percentile_score(
         df["profit_margin"],
         higher_is_better=True,
@@ -2958,6 +2428,26 @@ def calculate_quality_score(
 
     df["score_operating_margin"] = percentile_score(
         df["operating_margin"],
+        higher_is_better=True,
+    )
+
+    df["score_gross_margin"] = percentile_score(
+        df["gross_margin"],
+        higher_is_better=True,
+    )
+
+    df["score_current_ratio"] = percentile_score(
+        df["current_ratio"],
+        higher_is_better=True,
+    )
+
+    df["score_quick_ratio"] = percentile_score(
+        df["quick_ratio"],
+        higher_is_better=True,
+    )
+
+    df["score_free_cash_flow"] = percentile_score(
+        df["free_cash_flow"],
         higher_is_better=True,
     )
 
@@ -2982,33 +2472,20 @@ def calculate_growth_score(
 
     df = df.copy()
 
-    df["score_qoq_revenue_growth"] = percentile_score(
-        df["qoq_revenue_growth"],
+    df["score_revenue_growth"] = percentile_score(
+        df["revenue_growth"],
         higher_is_better=True,
     )
 
-    df["score_qoq_net_profit_growth"] = percentile_score(
-        df["qoq_net_profit_growth"],
+    df["score_earnings_growth"] = percentile_score(
+        df["earnings_growth"],
         higher_is_better=True,
     )
 
-    df["score_qoq_eps_growth"] = percentile_score(
-        df["qoq_eps_growth"],
-        higher_is_better=True,
-    )
-
-    df["score_yoy_revenue_growth"] = percentile_score(
-        df["yoy_revenue_growth"],
-        higher_is_better=True,
-    )
-
-    df["score_yoy_net_profit_growth"] = percentile_score(
-        df["yoy_net_profit_growth"],
-        higher_is_better=True,
-    )
-
-    df["score_yoy_eps_growth"] = percentile_score(
-        df["yoy_eps_growth"],
+    df[
+        "score_quarterly_revenue_growth"
+    ] = percentile_score(
+        df["quarterly_revenue_growth"],
         higher_is_better=True,
     )
 
@@ -3040,10 +2517,20 @@ def calculate_valuation_score(
         lambda x: x > 0
     )
 
-    df["pe"] = pe
-
     df["score_pe"] = percentile_score(
         pe,
+        higher_is_better=False,
+    )
+
+    forward_pe = pd.to_numeric(
+        df["forward_pe"],
+        errors="coerce",
+    ).where(
+        lambda x: x > 0
+    )
+
+    df["score_forward_pe"] = percentile_score(
+        forward_pe,
         higher_is_better=False,
     )
 
@@ -3054,15 +2541,46 @@ def calculate_valuation_score(
         lambda x: x > 0
     )
 
-    df["price_book"] = pb
-
-    df["score_price_book"] = percentile_score(
+    df["score_pb"] = percentile_score(
         pb,
         higher_is_better=False,
     )
 
-    # Keep the historical score_pb naming as a compatibility alias.
-    df["score_pb"] = df["score_price_book"]
+    peg = pd.to_numeric(
+        df["peg"],
+        errors="coerce",
+    ).where(
+        lambda x: x > 0
+    )
+
+    df["score_peg"] = percentile_score(
+        peg,
+        higher_is_better=False,
+    )
+
+    price_sales = pd.to_numeric(
+        df["price_sales"],
+        errors="coerce",
+    ).where(
+        lambda x: x > 0
+    )
+
+    df["score_price_sales"] = percentile_score(
+        price_sales,
+        higher_is_better=False,
+    )
+
+    ev_ebitda = pd.to_numeric(
+        df["ev_ebitda"],
+        errors="coerce",
+    ).where(
+        lambda x: x > 0
+    )
+
+    df["score_ev_ebitda"] = percentile_score(
+        ev_ebitda,
+        higher_is_better=False,
+    )
 
     df["valuation_score"] = (
         weighted_score(
@@ -3569,22 +3087,25 @@ def display_fundamental_rankings(
         "price",
 
         "roe",
+        "roa",
+        "debt_equity",
         "profit_margin",
         "operating_margin",
+        "gross_margin",
+        "current_ratio",
+        "quick_ratio",
+        "free_cash_flow",
 
-        "qoq_revenue_growth",
-        "qoq_net_profit_growth",
-        "qoq_eps_growth",
-
-        "qoq_revenue_growth",
-        "qoq_net_profit_growth",
-        "qoq_eps_growth",
-        "yoy_revenue_growth",
-        "yoy_net_profit_growth",
-        "yoy_eps_growth",
+        "revenue_growth",
+        "earnings_growth",
+        "quarterly_revenue_growth",
 
         "pe",
+        "forward_pe",
         "price_book",
+        "peg",
+        "price_sales",
+        "ev_ebitda",
 
         "quality_score",
         "growth_score",
@@ -3779,22 +3300,25 @@ def display_top_detailed(
         "max_drawdown",
 
         "roe",
+        "roa",
+        "debt_equity",
         "profit_margin",
         "operating_margin",
+        "gross_margin",
+        "current_ratio",
+        "quick_ratio",
+        "free_cash_flow",
 
-        "qoq_revenue_growth",
-        "qoq_net_profit_growth",
-        "qoq_eps_growth",
-
-        "qoq_revenue_growth",
-        "qoq_net_profit_growth",
-        "qoq_eps_growth",
-        "yoy_revenue_growth",
-        "yoy_net_profit_growth",
-        "yoy_eps_growth",
+        "revenue_growth",
+        "earnings_growth",
+        "quarterly_revenue_growth",
 
         "pe",
+        "forward_pe",
         "price_book",
+        "peg",
+        "price_sales",
+        "ev_ebitda",
 
         "momentum_score",
         "trend_score",
@@ -3862,26 +3386,29 @@ def display_factor_leaders(
         "ROE":
             "roe",
 
-        "Net Profit Margin":
+        "ROA":
+            "roa",
+
+        "Profit Margin":
             "profit_margin",
 
-        "Operating Profit Margin":
+        "Operating Margin":
             "operating_margin",
 
-        "YoY Revenue Growth":
-            "yoy_revenue_growth",
+        "Gross Margin":
+            "gross_margin",
 
-        "YoY Net Profit Growth":
-            "yoy_net_profit_growth",
+        "Free Cash Flow":
+            "free_cash_flow",
 
-        "YoY EPS Growth":
-            "yoy_eps_growth",
+        "Revenue Growth":
+            "revenue_growth",
 
-        "P/E":
-            "pe",
+        "Earnings Growth":
+            "earnings_growth",
 
-        "P/B":
-            "price_book",
+        "Quarterly Revenue Growth":
+            "quarterly_revenue_growth",
 
         "Momentum Score":
             "momentum_score",
@@ -3936,14 +3463,19 @@ def display_factor_leaders(
 
             rows.append(
                 {
-                    "Factor": factor_name,
-                    "Symbol": row["symbol"],
-                    "Value": round(
-                        safe_float(
-                            row[column]
+                    "Factor":
+                        factor_name,
+
+                    "Symbol":
+                        row["symbol"],
+
+                    "Value":
+                        round(
+                            safe_float(
+                                row[column]
+                            ),
+                            2,
                         ),
-                        2,
-                    ),
                 }
             )
 
@@ -4183,79 +3715,73 @@ def display_research_notes() -> None:
         "50% Momentum + 30% Trend + 20% Risk.",
 
         "4. Fundamental Score = "
-        "35% Quality + 45% Growth + 20% Valuation.",
+        "35% Quality + 35% Growth + 30% Valuation.",
 
         "5. Combined Research Score = "
         "50% Market Research + 50% Fundamental.",
 
-        "6. Primary fundamental source = Dalal / BSE; yfinance is used "
-        "only as a supplementary source for YoY growth.",
+        "6. Quality includes profitability, margins, leverage, "
+        "liquidity and free cash flow.",
 
-        "7. Quality uses ROE, Net Profit Margin and Operating Profit Margin "
-        "from Dalal.",
+        "7. Growth includes Revenue Growth, Earnings Growth "
+        "and Quarterly Revenue Growth.",
 
-        "8. Growth combines QoQ and YoY Revenue, Net Profit and EPS growth.",
+        "8. EPS Growth has been removed because "
+        "earningsQuarterlyGrowth is not a valid long-term EPS-growth "
+        "measure.",
 
-        "9. QoQ growth is calculated from Dalal current quarter versus "
-        "previous quarter.",
+        "9. Valuation includes P/E, Forward P/E, P/B, PEG, "
+        "Price/Sales and EV/EBITDA.",
 
-        "10. YoY Revenue and Earnings Growth use yfinance 1-year growth "
-        "fields where available; YoY EPS uses quarterly yfinance EPS "
-        "where the required comparison is available.",
+        "10. Negative valuation multiples are treated as unavailable "
+        "for valuation scoring.",
 
-        "11. Growth weighting is 40% QoQ and 60% YoY, with Revenue/Net "
-        "Profit/EPS weighted 40%/35%/25% within each subgroup.",
+        "11. Missing fundamental values remain NaN.",
 
-        "12. Valuation uses P/E and P/B from Dalal.",
+        "12. Missing fundamental values are NEVER converted to zero.",
 
-        "13. Negative or zero valuation multiples are treated as unavailable.",
+        "13. Available factors are scored using their available weights.",
 
-        "14. Missing fundamental values remain NaN.",
+        "14. Fundamental data completeness is explicitly measured.",
 
-        "15. Missing fundamental values are NEVER converted to zero.",
+        "15. Quality, Growth and Valuation completeness are measured "
+        "separately.",
 
-        "16. Available factors are scored using their available weights.",
+        "16. Weighted completeness uses the SAME raw-factor weights "
+        "as the corresponding fundamental score.",
 
-        "17. Fundamental data completeness is explicitly measured.",
+        "17. Fundamental confidence is based on weighted completeness.",
 
-        "18. Quality, Growth and Valuation completeness are measured separately.",
+        "18. High confidence requires >=80% completeness.",
 
-        "19. Weighted completeness uses the same raw-factor weights as scoring.",
+        "19. Medium confidence requires >=60% completeness.",
 
-        "20. Fundamental confidence is based on weighted completeness.",
+        "20. Low-confidence stocks are excluded from headline "
+        "Fundamental and Combined rankings.",
 
-        "21. High confidence requires >=80% completeness.",
+        "21. Low-confidence stocks remain in the Excel Research Data.",
 
-        "22. Medium confidence requires >=60% completeness.",
+        "22. Actual factor coverage is printed for every fundamental field.",
 
-        "23. Low-confidence stocks are excluded from headline Fundamental "
-        "and Combined rankings.",
+        "23. The coverage table identifies factors exceeding 80% coverage.",
 
-        "24. Low-confidence stocks remain in the Excel Research Data.",
+        "24. Current Yahoo Finance fundamental data is not a complete "
+        "point-in-time historical dataset.",
 
-        "25. Raw Dalal Revenue, Net Profit and EPS period values are retained "
-        "for transparency.",
+        "25. Current fundamental research is therefore suitable for "
+        "current research but not yet unbiased historical backtesting.",
 
-        "26. Dalal-supported factors are used directly; unsupported factors "
-        "are not fabricated.",
+        "26. Future work should add point-in-time reporting dates.",
 
-        "27. Current Dalal/yfinance fundamentals represent currently available "
-        "information and are not a complete point-in-time historical database.",
+        "27. Future work should add historical financial-statement "
+        "growth measures such as 3Y Revenue CAGR and 3Y EPS CAGR.",
 
-        "28. Current fundamental research is suitable for current research "
-        "but not yet unbiased historical backtesting.",
+        "28. Future backtesting should use VectorBT after the "
+        "point-in-time fundamental dataset is constructed.",
 
-        "29. Future work should add point-in-time financial reporting dates.",
+        "29. Research rankings are not BUY/SELL recommendations.",
 
-        "30. Future work should add historical financial statements, TTM, "
-        "3Y/5Y growth and reporting-date alignment.",
-
-        "31. Future backtesting should use VectorBT after the point-in-time "
-        "fundamental dataset is constructed.",
-
-        "32. Research rankings are not BUY/SELL recommendations.",
-
-        "33. Historical performance does not guarantee future returns.",
+        "30. Historical performance does not guarantee future returns.",
     ]
 
     for note in notes:
@@ -4425,21 +3951,18 @@ def display_final_summary(
     )
 
     print(
-        "  Quality   = ROE + Net Profit Margin + "
-        "Operating Profit Margin"
+        "  Quality   = profitability + margins + "
+        "leverage + liquidity + cash flow"
     )
 
     print(
-        "  Growth    = QoQ Revenue + QoQ Net Profit + QoQ EPS + "
-        "YoY Revenue + YoY Net Profit + YoY EPS"
+        "  Growth    = revenue + earnings + "
+        "quarterly revenue growth"
     )
 
     print(
-        "  Valuation = P/E + P/B"
-    )
-
-    print(
-        "  Growth weighting = 40% QoQ + 60% YoY"
+        "  Valuation = earnings + book + sales + "
+        "enterprise-value based measures"
     )
 
     print()
@@ -4454,7 +3977,6 @@ def display_final_summary(
         " → Momentum"
         " → Trend"
         " → Risk"
-        " → Dalal Fundamentals"
         " → Quality"
         " → Growth"
         " → Valuation"
@@ -5513,7 +5035,7 @@ def build_excel_dashboard(
 
     style_dashboard_title(
         ws,
-        "A1:P2",
+        "A1:N2",
         "FUNDAMENTALALPHAFORGE — EQUITY RESEARCH DASHBOARD",
     )
 
@@ -5528,7 +5050,7 @@ def build_excel_dashboard(
         ws,
         4,
         1,
-        16,
+        14,
         "RUN INFORMATION",
     )
 
@@ -5603,7 +5125,7 @@ def build_excel_dashboard(
         ws,
         7,
         1,
-        16,
+        14,
         "KEY RESEARCH INDICATORS",
     )
 
@@ -6143,8 +5665,10 @@ def build_excel_dashboard(
         "symbol",
         "quality_score",
         "roe",
+        "roa",
         "profit_margin",
         "operating_margin",
+        "debt_equity",
     ]
 
     top_quality = (
@@ -6183,19 +5707,16 @@ def build_excel_dashboard(
         ws,
         growth_row,
         9,
-        16,
+        14,
         "TOP 10 GROWTH STOCKS",
     )
 
     growth_columns = [
         "symbol",
         "growth_score",
-        "qoq_revenue_growth",
-        "qoq_net_profit_growth",
-        "qoq_eps_growth",
-        "yoy_revenue_growth",
-        "yoy_net_profit_growth",
-        "yoy_eps_growth",
+        "revenue_growth",
+        "earnings_growth",
+        "quarterly_revenue_growth",
     ]
 
     top_growth = (
@@ -6242,7 +5763,10 @@ def build_excel_dashboard(
         "symbol",
         "valuation_score",
         "pe",
+        "forward_pe",
         "price_book",
+        "peg",
+        "ev_ebitda",
     ]
 
     top_valuation = (
@@ -6445,7 +5969,7 @@ def build_excel_dashboard(
 
     for column in range(
         1,
-        17,
+        15,
     ):
 
         ws.column_dimensions[
@@ -6466,8 +5990,6 @@ def build_excel_dashboard(
     ws.column_dimensions["L"].width = 18
     ws.column_dimensions["M"].width = 18
     ws.column_dimensions["N"].width = 18
-    ws.column_dimensions["O"].width = 18
-    ws.column_dimensions["P"].width = 18
 
     ws.freeze_panes = "A4"
 
@@ -6780,35 +6302,30 @@ def main() -> None:
 
         fundamental_columns = [
 
-            *ALL_FUNDAMENTAL_FACTORS,
+            "roe",
+            "roa",
+            "debt_equity",
 
-            "bse_code",
-            "bse_company_name",
-            "bse_security_symbol",
-            "dalal_security_id",
-            "fundamental_source",
+            "profit_margin",
+            "operating_margin",
+            "gross_margin",
+            "current_ratio",
+            "quick_ratio",
+            "free_cash_flow",
 
-            "fundamental_revenue",
-            "fundamental_revenue_previous_quarter",
-            "fundamental_net_profit",
-            "fundamental_net_profit_previous_quarter",
-            "fundamental_eps",
-            "fundamental_eps_previous_quarter",
-            "fundamental_opm_pct",
-            "fundamental_npm_pct",
-            "fundamental_period",
-            "fundamental_previous_period",
-            "fundamental_fy_period",
-            "meta_eps",
-            "yoy_revenue_current",
-            "yoy_revenue_prior_year",
-            "yoy_net_profit_current",
-            "yoy_net_profit_prior_year",
-            "yoy_eps_current",
-            "yoy_eps_prior_year",
-            "yoy_current_period",
-            "yoy_prior_year_period",
-            "yoy_source",
+            "revenue_growth",
+            "earnings_growth",
+            "quarterly_revenue_growth",
+
+            "pe",
+            "forward_pe",
+            "price_book",
+            "peg",
+            "price_sales",
+            "ev_ebitda",
+
+            "market_cap",
+            "enterprise_value",
         ]
 
         for column in fundamental_columns:
