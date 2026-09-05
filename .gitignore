@@ -4,3 +4,9 @@ __pycache__/
 .env
 universe.py
 results/
+# ============================================================
+# MonthlyMomentumLab generated files
+# ============================================================
+
+src/MonthlyMomentumLab/cache/
+src/MonthlyMomentumLab/results/
