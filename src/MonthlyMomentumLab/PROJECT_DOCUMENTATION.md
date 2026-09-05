@@ -2,186 +2,244 @@
 
 ## Project Documentation
 
-### Production Monthly Momentum + Breakout Research Engine
+**Project:** InvestmentResearchLab
+**Module:** MonthlyMomentumLab
+**Purpose:** Monthly quantitative equity ranking and portfolio signal generation
+**Market:** Indian Equities
+**Universe:** Nifty 500
+**Signal Frequency:** Monthly
 
 ---
 
-# 1. Project Overview
+# 1. Executive Summary
 
-`MonthlyMomentumLab` is a quantitative equity research and production signal engine designed for systematic monthly stock selection within the Nifty 500 universe.
+MonthlyMomentumLab is a production-oriented quantitative equity research engine developed within the `InvestmentResearchLab` repository.
 
-The system uses a monthly momentum + breakout methodology.
+The system is designed to identify strong Indian equities using a combination of:
 
-Daily market data is converted into completed monthly bars. The engine then calculates:
+```text
+9-month momentum
++
+6-month breakout
++
+monthly volume confirmation
+```
 
-* 9-month momentum
-* 6-month breakout strength
-* Monthly volume confirmation
-* Combined ranking score
+The engine operates on completed monthly market data and produces:
 
-The highest-ranked eligible stocks form the monthly research and portfolio candidates.
+```text
+Top 30 qualified research candidates
++
+Top 10 portfolio candidates
++
+BUY / HOLD / SELL instructions
++
+CSV reports
++
+Excel report
++
+diagnostic market regime
+```
 
-The production portfolio contains up to 10 stocks with equal capital allocation.
+The engine is intentionally lightweight and optimized for a runtime of seconds to a few minutes rather than performing a large strategy-grid search during production execution.
 
 ---
 
-# 2. Strategy Identity
+# 2. Strategy Identifier
 
-The locked production strategy is:
+The current strategy is identified as:
 
 ```text
 COMB_M9S0_B6_V1.5_T0_R0_N10_RB1
 ```
 
-The identifier is intentionally compact and describes the primary strategy parameters.
+The identifier is interpreted as follows:
 
-| Code | Parameter           | Value               |
-| ---- | ------------------- | ------------------- |
-| COMB | Strategy family     | Momentum + Breakout |
-| M9   | Momentum            | 9 months            |
-| S0   | Skip month          | 0 months            |
-| B6   | Breakout            | 6 months            |
-| V1.5 | Volume confirmation | >= 1.50x            |
-| T0   | Trend filter        | None                |
-| R0   | Regime filter       | None                |
-| N10  | Portfolio size      | Top 10              |
-| RB1  | Rebalance           | Monthly             |
-
----
-
-# 3. Design Objective
-
-The objective is to create a production engine that:
-
-1. Uses a defined universe.
-2. Uses reproducible market data.
-3. Converts daily data into completed monthly observations.
-4. Calculates predefined strategy features.
-5. Produces a deterministic ranking.
-6. Selects the highest-ranked stocks.
-7. Compares the new portfolio against current holdings.
-8. Generates rebalance instructions.
-9. Produces auditable reports.
-10. Runs quickly enough for practical monthly operation.
-
-The production system intentionally avoids unnecessary computational work.
+| Code | Definition                   |
+| ---- | ---------------------------- |
+| COMB | Combined momentum + breakout |
+| M9   | 9-month momentum             |
+| S0   | No skip month                |
+| B6   | 6-month breakout             |
+| V1.5 | Volume confirmation at 1.50x |
+| T0   | No trend filter              |
+| R0   | No market regime filter      |
+| N10  | Top 10 portfolio             |
+| RB1  | Monthly rebalance            |
 
 ---
 
-# 4. Research and Production Separation
+# 3. Historical Research Background
 
-The architecture separates strategy discovery from signal generation.
+The broader research process evaluated monthly momentum and breakout strategy families across the Nifty 500 universe.
+
+The strongest historical strategy previously identified was:
 
 ```text
-                  RESEARCH
-                     |
-                     v
-          Strategy discovery
-                     |
-                     v
-             Backtesting
-                     |
-                     v
-          Out-of-sample testing
-                     |
-                     v
-            Strategy selection
-                     |
-                     v
-              LOCK STRATEGY
-                     |
-                     v
-                  PRODUCTION
-                     |
-                     v
-          Current market signal
+COMB_M9S0_B6_V1.5_T0_R0_N10_RB1
 ```
 
-This separation is important.
-
-The production engine is not intended to continuously search for a better strategy.
-
-Instead, it applies the selected configuration consistently.
-
----
-
-# 5. Production Architecture
-
-The main production components are:
+A representative historical research run produced approximately:
 
 ```text
-InvestmentResearchLab
-│
-├── universe.py
-│
-└── src
-    │
-    └── MonthlyMomentumLab
-        │
-        ├── main.py
-        ├── trade_data.py
-        ├── README.md
-        ├── PROJECT_DOCUMENTATION.md
-        │
-        ├── cache/
-        │
-        └── results/
+Universe                 : 500 stocks
+Completed months         : 60
+Strategies evaluated     : 13,824
+Runtime                  : ~190 seconds
+Holdout CAGR             : 19.05%
+Holdout Sharpe           : 1.10
+Holdout Max Drawdown     : -7.27%
 ```
 
----
+These figures belong to the previously researched strategy definition.
 
-# 6. Module Responsibilities
+They must **not** automatically be attributed to the current production version because the production engine now includes additional live eligibility constraints:
 
-## 6.1 `main.py`
+```text
+Momentum_9M >= 0
+Breakout_6M >= 0
+```
 
-`main.py` is the production signal engine.
-
-It is responsible for:
-
-* Universe refresh orchestration
-* Universe loading
-* Historical data loading
-* Data normalization
-* Monthly conversion
-* Feature calculation
-* Signal generation
-* Regime monitoring
-* Holdings loading
-* Order generation
-* CSV reporting
-* Excel reporting
-* Runtime measurement
-* Error handling
+The modified version requires its own backtest.
 
 ---
 
-## 6.2 `trade_data.py`
+# 4. Current Production Modification
 
-`trade_data.py` is the existing market-data foundation.
+The current production engine introduces hard non-negative filters.
 
-The production engine discovers and uses the existing historical-data function rather than implementing a separate downloader.
+A stock must satisfy:
 
-The currently expected function is:
+```text
+Momentum_9M >= 0
+```
+
+and:
+
+```text
+Breakout_6M >= 0
+```
+
+and:
+
+```text
+Volume_Ratio >= 1.50
+```
+
+before it can be ranked.
+
+This modification was introduced specifically to prevent stocks with negative momentum or negative breakout values from appearing in the research or portfolio lists.
+
+---
+
+# 5. Eligibility Model
+
+The eligibility process occurs in three sequential filtering stages.
+
+## Stage 1 — Base validity
+
+The following fields must be available:
+
+```text
+Close
+Momentum_9M
+Breakout_6M
+Volume_Ratio
+```
+
+Rows containing missing values are excluded.
+
+---
+
+## Stage 2 — Momentum filter
+
+The engine applies:
 
 ```python
-get_historical_market_data_for_symbols
+Momentum_9M >= 0
 ```
 
-The function returns:
-
-```python
-data, valid_symbols
-```
-
-The production engine explicitly handles this tuple structure.
+Stocks below zero are removed.
 
 ---
 
-## 6.3 `universe.py`
+## Stage 3 — Breakout filter
 
-The root-level `universe.py` contains the Nifty 500 symbol list.
+The engine applies:
 
-The production engine dynamically searches for supported variable names such as:
+```python
+Breakout_6M >= 0
+```
+
+Stocks below zero are removed.
+
+---
+
+## Stage 4 — Volume filter
+
+The engine applies:
+
+```python
+Volume_Ratio >= 1.50
+```
+
+Stocks below 1.50x are removed.
+
+---
+
+# 6. Eligibility Formula
+
+The complete production condition is:
+
+```text
+Eligible =
+    Valid Close
+    AND Valid Momentum
+    AND Valid Breakout
+    AND Valid Volume Ratio
+    AND Momentum_9M >= 0
+    AND Breakout_6M >= 0
+    AND Volume_Ratio >= 1.50
+```
+
+This filtering occurs before ranking.
+
+---
+
+# 7. Data Universe
+
+The system uses the current Nifty 500 universe.
+
+The production workflow first attempts to refresh the universe through functions available in:
+
+```text
+trade_data.py
+```
+
+The engine recognizes several possible universe-refresh function names:
+
+```text
+refresh_nifty500_universe
+update_nifty500_universe
+refresh_universe
+update_universe
+```
+
+The first available callable is used.
+
+---
+
+# 8. Universe Loading
+
+The generated universe is normally located at:
+
+```text
+InvestmentResearchLab/universe.py
+```
+
+The engine also checks alternative locations if necessary.
+
+Recognized variable names include:
 
 ```text
 NIFTY_500_SYMBOLS
@@ -192,54 +250,85 @@ NIFTY_500
 NIFTY500
 ```
 
-The symbols are normalized into `.NS` format.
-
-Example:
+The symbols are normalized to Yahoo Finance-style NSE tickers:
 
 ```text
-RELIANCE
+SYMBOL.NS
 ```
 
-becomes:
+Duplicates are removed.
 
-```text
-RELIANCE.NS
-```
+The engine expects at least 400 symbols to consider the universe valid.
 
 ---
 
-# 7. Universe Refresh
+# 9. Market Data
 
-At the beginning of every production run, the engine attempts to refresh the Nifty 500 universe through the existing `trade_data.py` implementation.
-
-Supported function names include:
+The production system requests:
 
 ```text
-refresh_nifty500_universe
-refresh_nifty_500_universe
-update_nifty500_universe
-update_nifty_500_universe
+5 years of daily OHLCV data
 ```
 
-If an available refresh function is found, it is executed before loading `universe.py`.
+using:
 
-This keeps the production universe aligned with the project's existing universe infrastructure.
+```text
+trade_data.py
+```
 
----
-
-# 8. Historical Market Data
-
-The production configuration uses:
+The normal expected return structure is:
 
 ```python
-HISTORICAL_PERIOD = "5y"
+data, valid_symbols
 ```
 
-The requested universe is the current Nifty 500.
+The production engine explicitly handles this tuple structure.
 
-The historical data contains daily OHLCV observations.
+This prevents the common error where the entire tuple is incorrectly treated as the DataFrame.
 
-Expected fields include:
+---
+
+# 10. Daily Data Fields
+
+The strategy requires:
+
+```text
+Close
+High
+Volume
+```
+
+The monthly conversion also creates:
+
+```text
+Low
+```
+
+The monthly Open is not required by the current strategy.
+
+---
+
+# 11. Market Data Normalization
+
+The production engine supports:
+
+### MultiIndex columns
+
+Typical market-data structure:
+
+```text
+Price Field
+    └── Symbol
+```
+
+or:
+
+```text
+Symbol
+    └── Price Field
+```
+
+The normalization layer detects which MultiIndex level contains:
 
 ```text
 Open
@@ -250,253 +339,275 @@ Adj Close
 Volume
 ```
 
-The normalization layer supports common DataFrame structures produced by market-data libraries.
+and handles either orientation.
 
 ---
 
-# 9. Data Normalization
+# 12. Completed Monthly Data
 
-Market-data structures can differ depending on the downloader.
+Daily data is converted into monthly OHLCV observations.
 
-The engine normalizes them into a consistent representation:
+The current incomplete month is excluded.
+
+The exclusion logic uses the first day of the current calendar month.
+
+Conceptually:
 
 ```text
-Field        Symbol
--------------------------
-Open         RELIANCE.NS
-High         RELIANCE.NS
-Low          RELIANCE.NS
-Close        RELIANCE.NS
-Volume       RELIANCE.NS
-...
+Daily data
+     │
+     ├── Previous months → INCLUDED
+     │
+     └── Current month   → EXCLUDED
 ```
 
-This allows the feature engine to operate independently of the exact original DataFrame column arrangement.
+This is important because the monthly signal must not use an incomplete current candle.
 
 ---
 
-# 10. Daily-to-Monthly Conversion
+# 13. Monthly Aggregation
 
-The production strategy operates on monthly observations.
+For every stock:
 
-Daily data is aggregated into calendar-month bars.
-
-For each stock:
-
-### Monthly Open
-
-The production engine currently does not use monthly open for strategy calculations.
-
-### Monthly High
+### Close
 
 ```text
-Maximum daily high within the month
+Last daily close of the month
 ```
 
-### Monthly Low
+### High
 
 ```text
-Minimum daily low within the month
+Maximum daily high during the month
 ```
 
-### Monthly Close
+### Low
 
 ```text
-Last available daily close within the month
+Minimum daily low during the month
 ```
 
-### Monthly Volume
+### Volume
 
 ```text
-Sum of daily volume within the month
+Sum of daily volume during the month
+```
+
+The resulting monthly dataset has:
+
+```text
+Date
+Symbol
+Close
+High
+Low
+Volume
 ```
 
 ---
 
-# 11. Incomplete Month Protection
+# 14. Minimum Data Requirement
 
-One of the most important production controls is exclusion of the current incomplete month.
-
-The engine determines the beginning of the current calendar month.
-
-All monthly observations occurring within the current month are excluded.
-
-Therefore:
+The engine requires:
 
 ```text
-Current incomplete month
-        |
-        X
-```
-
-and:
-
-```text
-Last completed month
-        |
-        YES
-```
-
-is used as the signal month.
-
-This prevents a partially formed month from influencing the production ranking.
-
----
-
-# 12. Minimum Historical Requirement
-
-The production engine uses:
-
-```python
 MIN_MONTHS_REQUIRED = 15
 ```
 
-A stock needs sufficient monthly history to support the production calculations.
+completed monthly observations in the overall dataset before production processing continues.
 
-The engine reports the number of symbols with at least the required monthly history.
-
----
-
-# 13. Feature Engine
-
-The feature engine calculates three principal features.
+This provides enough historical data for the 9-month momentum calculation and supporting calculations.
 
 ---
 
-## 13.1 Momentum
+# 15. 9-Month Momentum
 
-Configuration:
+The production calculation is:
 
 ```python
-MOMENTUM_MONTHS = 9
+Momentum_9M =
+    Close / Close.shift(9) - 1
 ```
 
-Formula:
-
-```text
-Momentum_9M(t)
-=
-Close(t) / Close(t-9) - 1
-```
+For each stock independently.
 
 Example:
 
-If:
-
 ```text
-Current Close = 150
-9-month-ago Close = 100
+Current Close = ₹1,200
+9 months ago  = ₹1,000
+
+Momentum_9M =
+1,200 / 1,000 - 1
+
+= 0.20
+
+= +20%
 ```
 
-then:
+A stock with:
 
 ```text
-Momentum = 150 / 100 - 1
-         = 0.50
-         = 50%
+Momentum_9M = -0.10
 ```
+
+has:
+
+```text
+-10% momentum
+```
+
+and is excluded by the current production filter.
 
 ---
 
-# 14. Breakout Feature
+# 16. 6-Month Breakout
 
-Configuration:
+The production breakout calculation uses the highest high from the previous six completed monthly bars.
 
-```python
-BREAKOUT_MONTHS = 6
-```
-
-For each stock:
+The calculation is conceptually:
 
 ```text
 Prior High =
-highest monthly high among the previous six completed months
+maximum(
+    High(t-1),
+    High(t-2),
+    ...
+    High(t-6)
+)
 ```
 
-The current month is excluded from the reference window.
-
-Formula:
+Then:
 
 ```text
-Breakout_6M(t)
-=
-Close(t) / Prior_6M_High - 1
+Breakout_6M =
+    Close(t) / Prior High - 1
 ```
 
-A positive result indicates the current close is above the previous six-month high.
+The one-period shift is critical.
+
+It ensures the current month's high is not included in the breakout reference.
 
 ---
 
-# 15. Volume Confirmation
+# 17. Why the Breakout Uses a Shift
 
-Configuration:
+Without the shift:
+
+```text
+Current month High
+```
+
+could become part of the reference period.
+
+That would introduce current-period information into the benchmark against which the current close is evaluated.
+
+The production implementation therefore uses:
 
 ```python
-VOLUME_MULTIPLIER = 1.50
+x.shift(1)
 ```
+
+before calculating the six-month rolling maximum.
+
+This keeps the reference window restricted to previous completed monthly observations.
+
+---
+
+# 18. Volume Ratio
+
+The production volume calculation uses the previous three months.
 
 The reference volume is:
 
 ```text
-Average volume of the previous three completed months
+Average Volume =
+(
+    Volume(t-1)
+    +
+    Volume(t-2)
+    +
+    Volume(t-3)
+)
+/
+3
 ```
 
-Formula:
+Then:
 
 ```text
-Volume_Ratio(t)
-=
-Current Month Volume
-/
-Average Previous 3-Month Volume
+Volume_Ratio =
+    Volume(t)
+    /
+    Average Volume
 ```
 
-Eligibility condition:
+---
+
+# 19. Volume Eligibility
+
+The current production threshold is:
+
+```text
+1.50x
+```
+
+Therefore:
 
 ```text
 Volume_Ratio >= 1.50
 ```
 
-Therefore:
-
-```text
-Current volume >= 150% of reference volume
-```
-
 is required.
 
----
-
-# 16. Combined Score
-
-The production ranking score is:
+Example:
 
 ```text
-Combined_Score
-=
-Momentum_9M
-+
-Breakout_6M
+Current Volume = 15 million
+Prior 3M average = 10 million
+
+Volume Ratio = 1.50x
+
+Result = QUALIFIED
 ```
 
-No additional weighting is applied.
-
-For example:
+At:
 
 ```text
-Momentum = 40%
-Breakout = 10%
-
-Combined Score = 50%
+1.49x
 ```
 
-The combined score is used as the primary ranking variable.
+the stock is excluded.
 
 ---
 
-# 17. Ranking Hierarchy
+# 20. Combined Score
 
-Stocks are sorted by:
+The current ranking score is:
+
+```text
+Combined_Score =
+    Momentum_9M
+    +
+    Breakout_6M
+```
+
+Example:
+
+```text
+Momentum_9M  = 30%
+Breakout_6M  = 10%
+
+Combined Score = 40%
+```
+
+The score is used as the primary ranking factor.
+
+---
+
+# 21. Ranking Hierarchy
+
+Qualified stocks are sorted using:
 
 ```text
 1. Combined_Score
@@ -505,203 +616,560 @@ Stocks are sorted by:
 4. Volume_Ratio
 ```
 
-All four fields are sorted descending.
+All values are ranked descending.
 
-A numerical research rank is then assigned:
-
-```text
-1
-2
-3
-...
-N
-```
+This provides deterministic tie-breaking when two stocks have similar combined scores.
 
 ---
 
-# 18. Eligibility Pipeline
+# 22. Top 30 Research Universe
 
-The signal engine first selects the latest completed month.
+After ranking:
 
-Then stocks must satisfy:
-
-```text
-Close is valid
-AND
-Momentum_9M is valid
-AND
-Breakout_6M is valid
-AND
-Volume_Ratio is valid
-AND
-Volume_Ratio >= 1.50
+```python
+top30 = eligible.head(30)
 ```
 
-Only these stocks participate in the ranking.
+The Top 30 represents the strongest qualified research candidates.
+
+The actual number can be less than 30.
+
+For example:
+
+```text
+Eligible stocks = 18
+
+Top 30 = 18
+```
+
+The engine does not artificially add unqualified stocks to fill the list.
 
 ---
 
-# 19. Top 30 Research Universe
+# 23. Top 10 Portfolio
 
-The engine retains:
+The portfolio is:
 
 ```python
-TOP_RESEARCH_STOCKS = 30
+top10 = eligible.head(10)
 ```
 
-The Top 30 is primarily a research and monitoring output.
+The maximum portfolio size is:
 
-It provides visibility into:
+```text
+10 stocks
+```
 
-* strongest candidates
-* ranking dispersion
-* near-term momentum
-* breakout strength
-* volume confirmation
-
-The Top 30 is not equivalent to the actual portfolio.
+The engine can return fewer than 10 when fewer than 10 stocks satisfy all filters.
 
 ---
 
-# 20. Top 10 Portfolio
+# 24. Capital Allocation
 
-The production portfolio uses:
-
-```python
-TOP_PORTFOLIO_STOCKS = 10
-```
-
-The highest-ranked 10 eligible stocks become the target portfolio.
-
-The capital allocation is:
-
-```python
-TOTAL_CAPITAL = 100_000.0
-```
-
-Equal allocation:
+The production capital assumption is:
 
 ```text
-100,000 / 10
+TOTAL_CAPITAL = ₹100,000
+```
+
+Target allocation per position:
+
+```text
+₹100,000 / 10
 =
-10,000 per stock
+₹10,000
 ```
 
 Target weight:
 
 ```text
-10% per stock
+10%
 ```
+
+The current code assigns:
+
+```text
+Target_Weight = 0.10
+Target_Capital = 10,000
+```
+
+to each selected portfolio stock.
 
 ---
 
-# 21. Reduced Portfolio Scenario
+# 25. Cash Handling
 
-If fewer than 10 stocks pass the eligibility criteria, the engine does not manufacture additional candidates.
+If fewer than ten stocks qualify, the unused capital remains cash.
 
-Instead, it allocates equally among the available eligible stocks.
-
-For example:
+Example:
 
 ```text
-7 eligible stocks
+7 qualified stocks
 ```
 
-results in:
+Allocation:
 
 ```text
-7 positions
+7 × ₹10,000
+=
+₹70,000
 ```
 
-with approximately:
+Remaining:
 
 ```text
-14.2857% each
+₹30,000 cash
 ```
 
-of the modeled capital.
-
-This avoids weakening the strategy simply to reach an arbitrary number of holdings.
+This is preferable to forcing low-quality stocks into the portfolio simply to reach ten positions.
 
 ---
 
-# 22. Holdings Management
+# 26. Portfolio Rebalancing
 
-The production engine reads:
+The engine reads:
 
 ```text
 results/current_holdings.csv
 ```
 
-Expected field:
+when available.
+
+It extracts symbols from supported columns such as:
 
 ```text
 Symbol
+symbol
+Ticker
+ticker
 ```
 
-The holdings file represents the portfolio currently believed to be held.
-
-The engine does not infer holdings from previous signals.
-
-This distinction is important because:
-
-```text
-Previous signal
-!=
-Actual current portfolio
-```
-
-The holdings file should therefore be updated after actual trades have been confirmed.
+The symbols are normalized before comparison.
 
 ---
 
-# 23. Rebalance Logic
+# 27. Order Logic
 
-The target portfolio is compared with current holdings.
+The current holdings are compared against the new Top 10.
 
-The comparison produces three actions.
+### New stock
 
----
-
-## BUY
+If:
 
 ```text
-Target Top 10
-+
+New Top 10
+AND
 Not currently held
-=
+```
+
+the engine produces:
+
+```text
 BUY
 ```
 
----
-
-## HOLD
+Reason:
 
 ```text
-Target Top 10
-+
-Already held
-=
-HOLD
+New Top 10 entrant
 ```
 
 ---
 
-## SELL
+### Existing stock
+
+If:
+
+```text
+New Top 10
+AND
+Already held
+```
+
+the engine produces:
+
+```text
+HOLD
+```
+
+Reason:
+
+```text
+Still in current Top 10
+```
+
+---
+
+### Removed stock
+
+If:
 
 ```text
 Currently held
-+
-Not in target Top 10
-=
+AND
+Not in new Top 10
+```
+
+the engine produces:
+
+```text
 SELL
+```
+
+Reason:
+
+```text
+No longer in current Top 10
 ```
 
 ---
 
-# 24. Order Processing Sequence
+# 28. Order Priority
 
-Orders are displayed in this priority:
+Orders are sorted in the following sequence:
+
+```text
+1. SELL
+2. BUY
+3. HOLD
+```
+
+Within the same action category, the combined score is used where available.
+
+---
+
+# 29. Safety Controls
+
+The production engine includes explicit validation.
+
+After Top 30 selection:
+
+```text
+Momentum_9M < 0
+```
+
+is considered a failure.
+
+Likewise:
+
+```text
+Breakout_6M < 0
+```
+
+is considered a failure.
+
+The program raises:
+
+```text
+RuntimeError
+```
+
+rather than silently continuing.
+
+The same safety checks are applied to Top 10.
+
+This ensures the production output obeys the live eligibility specification.
+
+---
+
+# 30. Regime Monitor
+
+The engine calculates a diagnostic market regime.
+
+It creates a date-by-date matrix:
+
+```text
+Date × Symbol
+```
+
+using monthly closes.
+
+For each month it calculates:
+
+```text
+Median stock close
+```
+
+across the available universe.
+
+This creates the internal:
+
+```text
+Market_Proxy
+```
+
+---
+
+# 31. 10-Month Market Proxy MA
+
+The regime monitor calculates:
+
+```text
+Market_10M_MA
+```
+
+using a 10-month rolling mean.
+
+It also retains:
+
+```text
+Previous_10M_MA
+```
+
+for determining the direction of the moving average.
+
+---
+
+# 32. Regime Classification
+
+## GREEN
+
+```text
+Market Proxy > Current 10M MA
+AND
+Current 10M MA > Previous 10M MA
+```
+
+Interpretation:
+
+```text
+Proxy above trend
++
+trend rising
+```
+
+---
+
+## RED
+
+```text
+Market Proxy < Current 10M MA
+AND
+Current 10M MA < Previous 10M MA
+```
+
+Interpretation:
+
+```text
+Proxy below trend
++
+trend falling
+```
+
+---
+
+## YELLOW
+
+Any other valid configuration.
+
+This represents a transition or mixed condition.
+
+---
+
+# 33. Important Regime Limitation
+
+The current regime monitor does **not** use the actual Nifty 500 index level.
+
+Instead, it uses:
+
+```text
+median monthly stock close
+```
+
+across the available universe.
+
+Therefore:
+
+```text
+Market_Proxy
+```
+
+should not be interpreted as an actual Nifty index value.
+
+It is a diagnostic cross-sectional proxy.
+
+---
+
+# 34. Bear Overlay
+
+The code contains an optional bear overlay configuration:
+
+```python
+ENABLE_BEAR_OVERLAY = False
+```
+
+The overlay is intentionally disabled.
+
+This preserves:
+
+```text
+R0
+```
+
+meaning:
+
+```text
+No market regime filter
+```
+
+Turning it on would change the strategy and require independent backtesting.
+
+---
+
+# 35. Research vs Production Separation
+
+The project distinguishes between:
+
+## Research
+
+Used for:
+
+* strategy discovery
+* parameter testing
+* walk-forward testing
+* holdout evaluation
+* robustness testing
+
+## Production
+
+Used for:
+
+* refreshing current data
+* calculating the current signal
+* generating portfolio candidates
+* generating orders
+* producing reports
+
+The production engine does not perform a large strategy grid search.
+
+This keeps execution fast and repeatable.
+
+---
+
+# 36. Runtime Architecture
+
+The production runtime consists of:
+
+```text
+Universe refresh
+        ↓
+Market data download
+        ↓
+Monthly conversion
+        ↓
+Feature calculation
+        ↓
+Signal generation
+        ↓
+Regime calculation
+        ↓
+Order generation
+        ↓
+CSV reports
+        ↓
+Excel report
+```
+
+The most expensive step is generally:
+
+```text
+Daily market-data download
+```
+
+The computational signal engine itself is lightweight.
+
+---
+
+# 37. Runtime Logging
+
+The engine records timing for major stages using:
+
+```python
+time.perf_counter()
+```
+
+Timing information is displayed for:
+
+* universe refresh/load
+* daily data load
+* monthly conversion
+* feature calculation
+* signal generation
+* total production runtime
+
+The total runtime is also written to the run summary.
+
+---
+
+# 38. Cache
+
+The monthly data is saved to:
+
+```text
+cache/monthly_market_cache_production_v1.pkl
+```
+
+The cache is intended to preserve the processed monthly dataset.
+
+The current production workflow still downloads fresh daily data on each execution.
+
+Therefore, the cache does not currently replace the live market-data download.
+
+---
+
+# 39. Output Architecture
+
+All generated production reports are stored in:
+
+```text
+src/MonthlyMomentumLab/results/
+```
+
+The current files are:
+
+```text
+current_monthly_signal.csv
+current_monthly_top30.csv
+current_monthly_orders.csv
+current_monthly_run_summary.csv
+monthly_momentum_lab_live_signal.xlsx
+```
+
+---
+
+# 40. CSV Report Definitions
+
+## current_monthly_signal.csv
+
+Contains the full ranked eligible universe.
+
+Important fields include:
+
+```text
+Research_Rank
+Symbol
+Close
+Momentum_9M
+Breakout_6M
+Volume_Ratio
+Combined_Score
+```
+
+Additional fields may include status and portfolio allocation fields depending on the stage of processing.
+
+---
+
+## current_monthly_top30.csv
+
+Contains the qualified Top 30 research list.
+
+The list is generated only after the hard eligibility filters.
+
+---
+
+## current_monthly_orders.csv
+
+Contains the current action list:
 
 ```text
 SELL
@@ -709,42 +1177,316 @@ BUY
 HOLD
 ```
 
-This makes exits visible before new entries.
-
-The engine does not submit orders to a broker.
-
----
-
-# 25. Execution Model
-
-The production signal is calculated after the completion of the signal month.
-
-The intended model is:
+along with:
 
 ```text
-Month-end data
-       |
-       v
-Signal calculation
-       |
-       v
-Next trading session
-       |
-       v
-Execution
+Target_Weight
+Target_Capital
+Momentum_9M
+Breakout_6M
+Volume_Ratio
+Combined_Score
 ```
-
-The engine does not claim execution at a price that is not yet known.
 
 ---
 
-# 26. Market Regime Monitor
+## current_monthly_run_summary.csv
 
-The production engine includes a diagnostic regime monitor.
+Contains the production run metadata.
 
-This is deliberately separate from the locked strategy.
+Important fields include:
 
-The locked strategy specifies:
+```text
+Run_Timestamp
+Signal_Month
+Strategy
+Universe
+Valid_Daily_Symbols
+Usable_Monthly_Symbols
+Completed_Months
+Eligible_Stocks
+Top30_Stocks
+Portfolio_Stocks
+Capital_Allocated
+Cash_Remaining
+Momentum_Filter
+Breakout_Filter
+Volume_Filter
+Regime
+Bear_Overlay_Enabled
+Runtime_Seconds
+```
+
+---
+
+# 41. Excel Workbook
+
+The production Excel workbook is:
+
+```text
+monthly_momentum_lab_live_signal.xlsx
+```
+
+It contains the following sheets.
+
+## Top 30
+
+Qualified research candidates.
+
+## Top 10
+
+Actual portfolio candidates and target allocations.
+
+## Orders
+
+Current BUY/HOLD/SELL instructions.
+
+## Eligible Universe
+
+Complete ranked eligible universe.
+
+## Run Summary
+
+Production metadata.
+
+## Regime Monitor
+
+Diagnostic regime information.
+
+---
+
+# 42. Project Directory
+
+The module resides at:
+
+```text
+src/MonthlyMomentumLab/
+```
+
+Main files:
+
+```text
+main.py
+trade_data.py
+__init__.py
+README.md
+PROJECT_DOCUMENTATION.md
+```
+
+Generated runtime directories:
+
+```text
+cache/
+results/
+```
+
+---
+
+# 43. Git Management
+
+Generated files should not be committed to Git.
+
+The relevant `.gitignore` entries are:
+
+```text
+src/MonthlyMomentumLab/cache/
+src/MonthlyMomentumLab/results/
+```
+
+This keeps generated market-data caches and live reports out of source control.
+
+Source code and documentation remain version controlled.
+
+---
+
+# 44. Execution
+
+From the MonthlyMomentumLab directory:
+
+```powershell
+python main.py
+```
+
+Expected sequence:
+
+```text
+MONTHLYMOMENTUMLAB
+
+STEP 1 — PROJECT DATA
+STEP 2 — MARKET DATA
+STEP 3 — MONTHLY DATA
+FEATURE ENGINE
+CURRENT SIGNAL GENERATION
+REGIME MONITOR
+CURRENT HOLDINGS
+ORDERS
+Excel report
+CURRENT MONTHLY SIGNAL
+PRODUCTION RUN COMPLETE
+```
+
+---
+
+# 45. Example Production Filtering
+
+Suppose the latest completed month begins with:
+
+```text
+Initial valid candidates : 498
+```
+
+After the momentum filter:
+
+```text
+Momentum >= 0 : 250
+```
+
+After breakout:
+
+```text
+Breakout >= 0 : 72
+```
+
+After volume confirmation:
+
+```text
+Volume >= 1.50x : 18
+```
+
+Then:
+
+```text
+Top 30 = 18
+Top 10 = 10
+```
+
+This is valid behavior.
+
+The engine does not manufacture additional candidates to reach 30.
+
+---
+
+# 46. Interpretation of the Top 30
+
+The Top 30 should be treated as:
+
+```text
+Research shortlist
+```
+
+not:
+
+```text
+30 buy recommendations
+```
+
+All Top 30 stocks have passed the current hard eligibility conditions, but only the strongest ten are selected for the model portfolio.
+
+---
+
+# 47. Interpretation of the Top 10
+
+The Top 10 represents the model portfolio under the current configuration.
+
+Each stock receives:
+
+```text
+10% target weight
+```
+
+assuming all ten positions are available.
+
+The portfolio is therefore:
+
+```text
+Equal-weighted
+```
+
+rather than capitalization-weighted or score-weighted.
+
+---
+
+# 48. Why Equal Weight
+
+Equal weighting prevents the strongest-ranked stock from receiving an excessive allocation simply because its score is higher.
+
+For the current ₹100,000 model:
+
+```text
+10 stocks
+×
+₹10,000
+=
+₹100,000
+```
+
+This creates a simple and transparent portfolio construction rule.
+
+---
+
+# 49. No Individual Stop-Loss
+
+The current locked strategy does not include an arbitrary stock-level stop-loss.
+
+The portfolio exit mechanism is primarily:
+
+```text
+Monthly ranking
++
+Top 10 membership
+```
+
+If a stock falls out of the Top 10, the order engine can generate:
+
+```text
+SELL
+```
+
+Introducing an individual stop-loss would create a materially different strategy and should therefore be backtested independently.
+
+---
+
+# 50. No Trend Filter
+
+The strategy identifier contains:
+
+```text
+T0
+```
+
+which means:
+
+```text
+No trend filter
+```
+
+The current production engine does not require:
+
+```text
+Price > 50 DMA
+```
+
+or:
+
+```text
+50 DMA > 200 DMA
+```
+
+for eligibility.
+
+The only current hard filters are:
+
+```text
+Momentum >= 0
+Breakout >= 0
+Volume >= 1.50x
+```
+
+---
+
+# 51. No Market Regime Filter
+
+The strategy identifier contains:
 
 ```text
 R0
@@ -756,894 +1498,642 @@ which means:
 No market regime filter
 ```
 
----
+The regime monitor is therefore informational only.
 
-# 27. Regime Monitor Methodology
-
-The available stock-level monthly data is converted into a cross-sectional matrix:
+The current Top 10 selection is not changed by:
 
 ```text
-Month x Stock
+GREEN
+YELLOW
+RED
 ```
 
-The median stock close for each month is used as a broad market proxy.
-
-Then:
-
-```text
-10-month moving average
-```
-
-is calculated.
-
-The monitor compares:
-
-```text
-Current Market Proxy
-vs
-Current 10M MA
-```
-
-and:
-
-```text
-Current 10M MA
-vs
-Previous 10M MA
-```
+regime states.
 
 ---
 
-# 28. Regime States
+# 52. Avoiding Look-Ahead Bias
 
-### GREEN
+The monthly signal architecture attempts to avoid look-ahead bias through:
 
-```text
-Market Proxy > 10M MA
-AND
-10M MA > Previous 10M MA
-```
+### Current month exclusion
 
-Interpretation:
+The incomplete month is removed.
 
-```text
-Positive trend environment
-```
-
----
-
-### RED
-
-```text
-Market Proxy < 10M MA
-AND
-10M MA < Previous 10M MA
-```
-
-Interpretation:
-
-```text
-Weakening trend environment
-```
-
----
-
-### YELLOW
-
-Anything that does not satisfy the strict GREEN or RED conditions.
-
-Interpretation:
-
-```text
-Mixed / transitional environment
-```
-
----
-
-# 29. Important Regime Limitation
-
-The regime monitor is not the Nifty 500 index itself.
-
-It uses a cross-sectional stock-price proxy.
-
-Therefore it should be interpreted as:
-
-```text
-Diagnostic market breadth-style proxy
-```
-
-rather than:
-
-```text
-Official Nifty 500 index signal
-```
-
-It should not be used as a portfolio filter unless separately validated.
-
----
-
-# 30. Bear Overlay
-
-The code contains:
-
-```python
-ENABLE_BEAR_OVERLAY = False
-```
-
-This must remain disabled while the locked strategy remains:
-
-```text
-R0
-```
-
-Activating a regime-based portfolio reduction would create a different strategy.
-
-For example:
-
-```text
-R0
-```
-
-and:
-
-```text
-R1
-```
-
-should be treated as separate research configurations.
-
-Any future overlay should undergo:
-
-* Full-history backtesting
-* Development-period testing
-* Out-of-sample testing
-* Drawdown analysis
-* Turnover analysis
-* Comparison against the locked R0 strategy
-
-before production use.
-
----
-
-# 31. Data Leakage Controls
-
-The production design attempts to prevent look-ahead bias.
-
-### Control 1 — Completed months only
-
-The current incomplete month is excluded.
-
-### Control 2 — Momentum lookback
-
-Momentum uses historical prices only.
-
-### Control 3 — Breakout lookback
+### Breakout shift
 
 The breakout reference uses:
 
 ```text
-previous six completed months
+previous six months
 ```
 
-rather than the current month.
+rather than including the current month.
 
-### Control 4 — Volume reference
+### Signal timing
 
-The volume reference uses:
+The signal is based on:
 
 ```text
-previous three completed months
+completed month-end
 ```
 
-rather than the current month.
+and intended for:
 
-### Control 5 — Execution
+```text
+following trading session
+```
 
-The signal is intended for the next trading session.
+These design choices are essential for realistic backtesting and live implementation.
 
 ---
 
-# 32. Production Reports
+# 53. Known Research Limitation
 
-The engine generates five principal report outputs.
+The new non-negative filters:
 
 ```text
-current_monthly_signal.csv
-current_monthly_top30.csv
-current_monthly_orders.csv
-current_monthly_run_summary.csv
-monthly_momentum_lab_live_signal.xlsx
+Momentum_9M >= 0
+Breakout_6M >= 0
 ```
+
+were added after the original strategy research.
+
+Therefore the following assumption is invalid:
+
+```text
+Original 19.05% holdout CAGR
+        =
+Current modified strategy CAGR
+```
+
+They are different strategy definitions.
+
+The modified strategy must be independently tested.
 
 ---
 
-# 33. Signal Report
+# 54. Required Validation
 
-File:
+Before treating the modified production version as statistically validated, perform a dedicated backtest comparing:
+
+## Version A
+
+Original:
 
 ```text
-current_monthly_signal.csv
+Momentum
++
+Breakout
++
+Volume
 ```
 
-Purpose:
+## Version B
+
+Modified:
 
 ```text
-Current production portfolio
+Momentum >= 0
++
+Breakout >= 0
++
+Volume >= 1.50x
 ```
 
-Contains the Top 10 and associated strategy metrics.
-
-Important fields include:
+The comparison should include:
 
 ```text
-Symbol
-Close
-Momentum_9M
-Breakout_6M
-Volume_Ratio
-Combined_Score
-Target_Weight
-Target_Capital
-Signal_Month
-Strategy
-Execution
-Regime_Monitor
-Bear_Overlay_Enabled
-```
-
----
-
-# 34. Top 30 Report
-
-File:
-
-```text
-current_monthly_top30.csv
-```
-
-Purpose:
-
-```text
-Research and monitoring
-```
-
-This file provides the complete current Top 30 ranked candidate set.
-
----
-
-# 35. Orders Report
-
-File:
-
-```text
-current_monthly_orders.csv
-```
-
-Purpose:
-
-```text
-Portfolio rebalance instructions
-```
-
-Possible actions:
-
-```text
-SELL
-BUY
-HOLD
+CAGR
+Sharpe
+Maximum Drawdown
+Calmar Ratio
+Turnover
+Trade Count
+Hit Rate
+Average Holding Period
+Monthly qualification count
+Portfolio exposure
+Cash percentage
 ```
 
 ---
 
-# 36. Run Summary
+# 55. Robustness Tests
 
-File:
+The modified strategy should also be tested across reasonable parameter ranges.
 
-```text
-current_monthly_run_summary.csv
-```
-
-Purpose:
+Examples:
 
 ```text
-Audit and operational monitoring
+Momentum:
+8M / 9M / 10M / 12M
+
+Breakout:
+3M / 6M / 9M
+
+Volume:
+1.25x / 1.50x / 1.75x / 2.00x
+
+Portfolio:
+5 / 10 / 15 / 20 stocks
 ```
 
-Contains:
+The purpose is not to maximize historical returns.
 
-* Run timestamp
-* Strategy identifier
-* Signal month
-* Universe information
-* Eligible stock count
-* Portfolio size
-* Total capital
-* Capital per position
-* Regime monitor
-* Bear overlay status
-* Runtime
+The purpose is to determine whether the strategy has a stable region of performance.
 
 ---
 
-# 37. Excel Report
+# 56. Out-of-Sample Testing
 
-File:
-
-```text
-monthly_momentum_lab_live_signal.xlsx
-```
-
-The workbook contains:
+The research process should maintain strict separation between:
 
 ```text
-LIVE_SIGNAL
-TOP_30
-ORDERS
-RUN_SUMMARY
-STRATEGY_RULES
+Development
+Validation
+Untouched Holdout
 ```
 
-This provides a single human-readable production report.
+The final strategy should not be selected using information from the untouched holdout.
+
+Once a strategy is selected, its holdout result should remain untouched.
+
+Any subsequent strategy modification requires a new validation process.
 
 ---
 
-# 38. Strategy Rules Sheet
+# 57. Production Safety Philosophy
 
-The Excel `STRATEGY_RULES` sheet records the production configuration.
+The production engine favors explicit failure over silent corruption.
 
-This is useful for auditability.
-
-The production report should always clearly identify:
+Examples:
 
 ```text
-COMB_M9S0_B6_V1.5_T0_R0_N10_RB1
+Missing universe
+        ↓
+FAIL
+
+Invalid market data
+        ↓
+FAIL
+
+Insufficient monthly history
+        ↓
+FAIL
+
+Negative momentum in Top 30
+        ↓
+FAIL
+
+Negative breakout in Top 30
+        ↓
+FAIL
 ```
 
-rather than relying on undocumented configuration values.
+This is preferable to producing an apparently valid but logically incorrect investment signal.
 
 ---
 
-# 39. Runtime Architecture
-
-The production engine measures runtime using:
-
-```python
-time.perf_counter()
-```
-
-Timing is recorded for major stages:
+# 58. Current Production Configuration
 
 ```text
-Universe refresh
-Universe loading
-Daily market data
-Monthly conversion
-Feature engine
-Signal generation
-Regime calculation
-Holdings loading
-Order generation
-Report generation
-Total runtime
-```
+PROJECT_NAME
+    MONTHLYMOMENTUMLAB
 
-This makes performance regressions easier to identify.
+STRATEGY_NAME
+    COMB_M9S0_B6_V1.5_T0_R0_N10_RB1
 
----
+HISTORICAL_PERIOD
+    5y
 
-# 40. Performance Philosophy
+MOMENTUM_MONTHS
+    9
 
-The production engine should remain lightweight.
+BREAKOUT_MONTHS
+    6
 
-The full research engine may evaluate thousands of strategy combinations.
+VOLUME_MULTIPLIER
+    1.50
 
-The production engine does not.
+VOLUME_AVERAGE_MONTHS
+    3
 
-Production should perform:
+TOP_RESEARCH_STOCKS
+    30
 
-```text
-Download
-    ->
-Transform
-    ->
-Calculate
-    ->
-Rank
-    ->
-Report
-```
+TOP_PORTFOLIO_STOCKS
+    10
 
-rather than:
+TOTAL_CAPITAL
+    ₹100,000
 
-```text
-Download
-    ->
-Thousands of backtests
-    ->
-Optimization
-    ->
-Strategy selection
-    ->
-Signal
+MIN_MONTHS_REQUIRED
+    15
+
+ENABLE_BEAR_OVERLAY
+    False
 ```
 
 ---
 
-# 41. Cache
-
-The production monthly cache is:
+# 59. Current Feature Configuration
 
 ```text
-cache/monthly_market_cache_production_v1.pkl
-```
+Momentum:
+    9-month price momentum
 
-It contains the standardized monthly dataset.
+Breakout:
+    Current close vs highest high
+    of previous 6 monthly bars
 
-The cache is intended to reduce repeated monthly transformation work and provide a reusable local representation.
+Volume:
+    Current monthly volume /
+    previous 3-month average volume
 
-The current production workflow still refreshes daily market data to obtain current information.
-
----
-
-# 42. Error Handling
-
-The program handles several common failure scenarios.
-
-Examples include:
-
-```text
-Missing trade_data.py
-Missing universe.py
-Missing market-data function
-Invalid market-data structure
-Empty market data
-Insufficient history
-Missing holdings file
-Excel/report failure
-Keyboard interruption
-```
-
-The entry point catches unexpected exceptions and prints the traceback.
-
----
-
-# 43. Operational Validation
-
-Before treating a production run as valid, check:
-
-### Universe
-
-```text
-Expected universe loaded
-```
-
-### Market data
-
-```text
-Valid symbols > 0
-Daily end date is current enough
-```
-
-### Monthly data
-
-```text
-Completed months >= minimum requirement
-```
-
-### Signal
-
-```text
-Signal month is the latest completed month
-```
-
-### Strategy
-
-```text
-Strategy identifier is unchanged
-```
-
-### Portfolio
-
-```text
-Top 10 is populated
-```
-
-### Orders
-
-```text
-BUY / HOLD / SELL matches current holdings
-```
-
-### Overlay
-
-```text
-Bear overlay = OFF
-```
-
-unless a separately validated strategy is intentionally being tested.
-
----
-
-# 44. Recommended Production Checklist
-
-Before each monthly signal run:
-
-```text
-[ ] Month has completed
-[ ] Universe refresh completed
-[ ] Nifty 500 universe loaded
-[ ] Historical data downloaded successfully
-[ ] Latest daily date is correct
-[ ] Current incomplete month excluded
-[ ] Sufficient monthly history exists
-[ ] Strategy identifier is unchanged
-[ ] Bear overlay remains OFF
-[ ] Top 30 generated
-[ ] Top 10 generated
-[ ] Current holdings file is correct
-[ ] BUY / HOLD / SELL reviewed
-[ ] Reports generated successfully
+Combined Score:
+    Momentum_9M + Breakout_6M
 ```
 
 ---
 
-# 45. Manual Execution
+# 60. Current Hard Filters
 
-From PowerShell:
+```text
+Momentum_9M >= 0
+Breakout_6M >= 0
+Volume_Ratio >= 1.50
+```
+
+All three must pass.
+
+---
+
+# 61. Current Portfolio Rules
+
+```text
+Maximum positions:
+    10
+
+Weight:
+    Equal weight
+
+Target weight:
+    10% per position
+
+Capital:
+    ₹100,000
+
+Capital per full position:
+    ₹10,000
+
+Rebalance:
+    Monthly
+```
+
+---
+
+# 62. Operational Procedure
+
+A normal monthly operating cycle is:
+
+### Step 1
+
+Allow the current month to complete.
+
+### Step 2
+
+Run:
 
 ```powershell
-cd C:\Users\natte\Documents\Project\InvestmentResearchLab
-.\.venv\Scripts\Activate.ps1
-cd src\MonthlyMomentumLab
 python main.py
 ```
 
----
+### Step 3
 
-# 46. Expected Production Sequence
-
-A successful run should look conceptually like:
+Review:
 
 ```text
-MONTHLYMOMENTUMLAB
-
-STAGE 1 — REFRESH NIFTY 500 UNIVERSE
-
-STAGE 2 — LOAD UNIVERSE
-
-STAGE 3 — DOWNLOAD DAILY MARKET DATA
-
-STAGE 4 — CONVERT TO COMPLETED MONTHLY BARS
-
-STAGE 5 — CALCULATE MOMENTUM + BREAKOUT FEATURES
-
-STAGE 6 — GENERATE CURRENT MONTHLY SIGNAL
-
-STAGE 7 — CALCULATE REGIME MONITOR
-
-STAGE 8 — LOAD CURRENT HOLDINGS
-
-STAGE 9 — GENERATE REBALANCE ORDERS
-
-STAGE 10 — SAVE REPORTS
-
-RUN COMPLETE
-```
-
----
-
-# 47. Current Production Philosophy
-
-The engine follows four important principles.
-
-## Principle 1 — No Look-Ahead
-
-Only information available at the signal date should influence the signal.
-
-## Principle 2 — Strategy Lock
-
-Production parameters should not be changed casually.
-
-## Principle 3 — Research/Production Separation
-
-Backtesting and production signal generation are different responsibilities.
-
-## Principle 4 — Auditability
-
-Every production run should leave behind enough information to understand:
-
-```text
-When was the signal generated?
-Which strategy was used?
-Which stocks qualified?
-What were the rankings?
-What were the intended actions?
-How long did the run take?
-```
-
----
-
-# 48. What This Engine Does Not Do
-
-The production engine does not:
-
-* Place broker orders
-* Manage broker authentication
-* Guarantee execution prices
-* Guarantee investment returns
-* Predict future stock prices
-* Run the full strategy grid
-* Automatically optimize parameters
-* Automatically activate the bear overlay
-* Replace independent investment due diligence
-
-It is a systematic research and signal-generation tool.
-
----
-
-# 49. Strategy Change Governance
-
-Any change to one of the following should trigger a new research/validation cycle:
-
-```text
-Momentum lookback
-Breakout lookback
-Volume threshold
-Volume reference period
-Skip-month logic
-Trend filter
-Regime filter
-Portfolio size
-Rebalance frequency
-Ranking formula
-Eligibility rules
-Execution assumptions
-```
-
-A code change that alters any of these is potentially a strategy change rather than merely a software improvement.
-
----
-
-# 50. Backtest Consistency Requirement
-
-The production implementation must remain mathematically aligned with the research/backtest implementation.
-
-Particular attention should be paid to:
-
-```text
-Momentum definition
-Breakout definition
-Volume reference definition
-Ranking formula
-Eligibility rules
-Portfolio construction
-Rebalance timing
-Execution timing
-```
-
-If any of these differ between the research engine and production engine, the historical backtest results cannot automatically be assumed to represent the production implementation.
-
-This is a critical validation requirement.
-
----
-
-# 51. Reproducibility
-
-The following should be preserved for each production signal:
-
-```text
-Strategy identifier
-Signal month
-Run timestamp
-Universe size
-Valid market-data symbols
-Usable monthly symbols
-Eligible stock count
 Top 30
-Top 10
-Orders
-Runtime
 ```
 
-The generated CSV and Excel reports provide the primary operational record.
+### Step 4
+
+Review:
+
+```text
+Top 10
+```
+
+### Step 5
+
+Review:
+
+```text
+Orders
+```
+
+### Step 6
+
+Check:
+
+```text
+Signal Month
+```
+
+### Step 7
+
+Confirm:
+
+```text
+Momentum >= 0
+Breakout >= 0
+Volume >= 1.50x
+```
+
+### Step 8
+
+Review the generated portfolio and execution plan independently before placing any real order.
 
 ---
 
-# 52. Future Enhancements
+# 63. Production Checklist
 
-Potential future improvements include:
-
-### Signal History
-
-Store every monthly Top 30 and Top 10 rather than overwriting the current files.
-
-### Portfolio History
-
-Maintain historical holdings and rebalance records.
-
-### Turnover Analytics
-
-Measure:
+Before acting on a signal:
 
 ```text
-Monthly turnover
-Annual turnover
-Number of entries
-Number of exits
+[ ] Latest completed month is correct
+[ ] Universe contains approximately 500 stocks
+[ ] Daily data loaded successfully
+[ ] Monthly conversion completed
+[ ] At least 15 completed months available
+[ ] Momentum filter enabled
+[ ] Breakout filter enabled
+[ ] Volume filter enabled
+[ ] No negative momentum in Top 30
+[ ] No negative breakout in Top 30
+[ ] Top 10 reviewed
+[ ] Orders reviewed
+[ ] Current holdings file is accurate
+[ ] BUY/HOLD/SELL actions verified
+[ ] Capital allocation verified
+[ ] Cash remaining verified
+[ ] Excel report generated
+[ ] Strategy modification understood
 ```
 
-### Transaction Cost Modeling
+---
 
-Add brokerage, taxes, slippage and market-impact assumptions to research.
+# 64. Design Principles
 
-### Research/Production Validation
+The project follows several core principles.
 
-Create an automated test that compares production feature calculations against the backtest implementation.
+## Simplicity
 
-### Market Index Regime
+Use a small number of economically interpretable factors.
 
-If a regime overlay is researched, use an explicit index series rather than the current stock-level proxy.
+## Transparency
 
-### Automated Data Quality Checks
+Every ranking component is visible.
+
+## Reproducibility
+
+Signals are generated through deterministic rules.
+
+## No forced positions
+
+Weak candidates are not added simply to fill the portfolio.
+
+## No hidden regime switching
+
+The R0 strategy remains unchanged unless independently tested.
+
+## Research discipline
+
+Strategy modifications must be tested separately.
+
+## Production reliability
+
+The engine validates critical assumptions before generating output.
+
+---
+
+# 65. Future Development Areas
+
+Potential future enhancements include:
+
+### 1. Dedicated modified-strategy backtest
 
 Validate:
 
-* duplicate symbols
-* missing months
-* abnormal prices
-* zero volume
-* stale data
-* unexpected date gaps
-
-### Historical Signal Archive
-
-Create:
-
 ```text
-results/history/
+Momentum >= 0
++
+Breakout >= 0
++
+Volume >= 1.50x
 ```
 
-with one immutable folder per signal month.
+### 2. True Nifty index regime
 
----
+Replace the cross-sectional proxy with an explicit Nifty benchmark series if a regime overlay is eventually tested.
 
-# 53. Recommended Future History Structure
+### 3. Transaction-cost modelling
 
-A future production archive could use:
-
-```text
-results/
-│
-├── current/
-│
-└── history/
-    │
-    ├── 2026-06/
-    │   ├── signal.csv
-    │   ├── top30.csv
-    │   ├── orders.csv
-    │   └── run_summary.csv
-    │
-    ├── 2026-07/
-    │   ├── signal.csv
-    │   ├── top30.csv
-    │   ├── orders.csv
-    │   └── run_summary.csv
-    │
-    └── 2026-08/
-        ├── signal.csv
-        ├── top30.csv
-        ├── orders.csv
-        └── run_summary.csv
-```
-
-This would create a permanent monthly research audit trail.
-
----
-
-# 54. Project Status
+Include:
 
 ```text
-PROJECT: MonthlyMomentumLab
-
-STATUS:
-Production Signal Engine
-
-STRATEGY:
-COMB_M9S0_B6_V1.5_T0_R0_N10_RB1
-
-TIMEFRAME:
-Monthly
-
-UNIVERSE:
-Nifty 500
-
-PORTFOLIO:
-Top 10
-
-CAPITAL MODEL:
-Rs. 100,000
-
-REBALANCE:
-Monthly
-
-REGIME FILTER:
-Disabled
-
-BEAR OVERLAY:
-Disabled
-```
-
----
-
-# 55. Final Design Summary
-
-The production architecture is intentionally simple:
-
-```text
-Current Nifty 500
-        |
-        v
-5 Years Daily Data
-        |
-        v
-Completed Monthly Bars
-        |
-        v
-9M Momentum
-        +
-6M Breakout
-        +
-1.5x Volume Confirmation
-        |
-        v
-Combined Ranking
-        |
-        v
-Top 30 Research Candidates
-        |
-        v
-Top 10 Portfolio
-        |
-        v
-Current Holdings Comparison
-        |
-        v
-BUY / HOLD / SELL
-        |
-        v
-CSV + Excel Reports
-```
-
-The core philosophy is:
-
-> **Do the complex work during research. Keep production deterministic, transparent and fast.**
-
-The production engine should apply the locked strategy consistently rather than continuously changing the rules based on recent market behavior.
-
----
-
-# 56. Important Research Governance Note
-
-The existence of a strong historical backtest does not guarantee future performance.
-
-The production system should therefore be treated as an ongoing research process.
-
-Performance should be monitored using:
-
-```text
-Realized returns
-Drawdown
-Turnover
-Transaction costs
+Brokerage
+STT
+Exchange charges
+GST
 Slippage
-Signal stability
-Universe changes
-Out-of-sample behavior
+Taxes
 ```
 
-Any substantial strategy modification should return to the research engine before being promoted to production.
+where appropriate for research.
+
+### 4. Portfolio turnover analysis
+
+Measure how frequently stocks enter and exit the Top 10.
+
+### 5. Historical signal archive
+
+Store monthly Top 30 and Top 10 outputs for later analysis.
+
+### 6. Execution integration
+
+Potentially connect the research engine to an order-management layer only after the strategy and operational controls are fully validated.
 
 ---
 
-## End of Documentation
+# 66. Non-Goals
+
+The current module is not intended to be:
+
+```text
+High-frequency trading
+Intraday trading
+Option trading
+Automated leverage
+Prediction of exact future prices
+Guaranteed-return system
+```
+
+Its primary purpose is:
+
+```text
+Monthly systematic equity research
+```
+
+---
+
+# 67. Final Project Status
+
+```text
+============================================================
+MONTHLYMOMENTUMLAB STATUS
+============================================================
+
+Universe:
+    Nifty 500
+
+Data:
+    5 years daily OHLCV
+
+Signal:
+    Completed monthly bars
+
+Momentum:
+    9 months
+
+Breakout:
+    6 months
+
+Volume:
+    Current month / prior 3M average
+
+Volume threshold:
+    1.50x
+
+Momentum >= 0:
+    ENABLED
+
+Breakout >= 0:
+    ENABLED
+
+Trend filter:
+    OFF
+
+Market regime filter:
+    OFF
+
+Bear overlay:
+    OFF
+
+Research output:
+    Top 30
+
+Portfolio:
+    Top 10
+
+Weight:
+    Equal weight
+
+Capital:
+    ₹100,000
+
+Rebalance:
+    Monthly
+
+Order types:
+    BUY / HOLD / SELL
+
+Reporting:
+    CSV + Excel
+
+Runtime target:
+    Seconds to minutes
+
+============================================================
+```
+
+---
+
+# 68. Final Research Warning
+
+The current production engine is technically designed to enforce:
+
+```text
+Momentum_9M >= 0
+Breakout_6M >= 0
+Volume_Ratio >= 1.50
+```
+
+However, these additional filters represent a **strategy modification**.
+
+The historical results of the original strategy must therefore be treated as historical evidence for the original strategy only.
+
+The correct research sequence is:
+
+```text
+Original Strategy
+       │
+       ▼
+Historical Validation
+       │
+       ▼
+Modified Eligibility Rules
+       │
+       ▼
+New Backtest
+       │
+       ▼
+Out-of-Sample Test
+       │
+       ▼
+Untouched Holdout
+       │
+       ▼
+Robustness Analysis
+       │
+       ▼
+Production Decision
+```
+
+Until that process is completed, the modified strategy should be considered:
+
+```text
+PRODUCTION SIGNAL ENGINE
++
+UNVALIDATED RESEARCH MODIFICATION
+```
+
+rather than a statistically proven improvement.
+
+---
+
+# 69. Disclaimer
+
+MonthlyMomentumLab is a quantitative research and decision-support system.
+
+It does not guarantee investment returns.
+
+Backtested results are hypothetical and may not reflect actual future performance.
+
+Real-world results can differ because of:
+
+* market conditions
+* liquidity
+* slippage
+* transaction costs
+* taxes
+* corporate actions
+* data quality
+* execution timing
+* gaps
+* delistings
+* survivorship effects
+* changes in the investment universe
+
+All strategy modifications should be independently validated before being considered statistically reliable.

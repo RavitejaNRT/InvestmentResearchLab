@@ -2,125 +2,134 @@
 MonthlyMomentumLab
 ==================
 
-Production Monthly Momentum + Breakout Research Engine
+Production Monthly Momentum + Breakout Signal Engine
 
-LOCKED STRATEGY
----------------
-
+LOCKED RESEARCH STRATEGY
+------------------------
 COMB_M9S0_B6_V1.5_T0_R0_N10_RB1
 
 Meaning:
+    COMB = Momentum + Breakout
+    M9   = 9-month momentum
+    S0   = No skip month
+    B6   = 6-month breakout
+    V1.5 = Current monthly volume >= 1.5x prior 3-month average
+    T0   = No trend filter
+    R0   = No market regime filter
+    N10  = Top 10 portfolio
+    RB1  = Monthly rebalance
 
-    COMB  = Momentum + Breakout
-    M9    = 9-month momentum
-    S0    = No skip month
-    B6    = 6-month breakout
-    V1.5  = Current monthly volume >= 1.5x reference volume
-    T0    = No trend filter
-    R0    = No market regime filter
-    N10   = Top 10 stocks
-    RB1   = Monthly rebalance
+LIVE ELIGIBILITY RULE
+---------------------
+A stock is eligible for ranking only when:
 
-Production workflow:
+    Momentum_9M >= 0
+    AND
+    Breakout_6M >= 0
+    AND
+    Volume_Ratio >= 1.50
 
-    1. Refresh Nifty 500 universe
-    2. Load universe.py
-    3. Download 5 years daily OHLCV data
-    4. Convert daily data to completed monthly bars
-    5. Calculate 9-month momentum
-    6. Calculate 6-month breakout
-    7. Calculate monthly volume confirmation
-    8. Rank stocks using combined score
-    9. Display Top 30 research universe
-   10. Select Top 10 portfolio
-   11. Compare against current holdings
-   12. Generate BUY / HOLD / SELL instructions
-   13. Save CSV and Excel reports
+Therefore:
+
+    Negative 9M momentum  -> EXCLUDED
+    Negative 6M breakout  -> EXCLUDED
+    Negative momentum AND breakout -> EXCLUDED
+
+PRODUCTION WORKFLOW
+-------------------
+1. Refresh current Nifty 500 universe.
+2. Load Nifty 500 symbols.
+3. Download 5 years of daily OHLCV data.
+4. Convert daily data to completed monthly bars.
+5. Calculate:
+       - 9M momentum
+       - 6M breakout
+       - volume ratio
+6. Apply hard eligibility filters.
+7. Rank eligible stocks.
+8. Display Top 30 research candidates.
+9. Select Top 10 portfolio candidates.
+10. Generate BUY / HOLD / SELL instructions.
+11. Generate CSV reports.
+12. Generate Excel report.
+13. Calculate diagnostic market regime.
+14. Bear overlay remains OFF by default.
+
+SIGNAL TIMING
+-------------
+The signal is generated using the latest COMPLETED monthly candle.
+
+Intended execution:
+    Following trading session.
 
 IMPORTANT
 ---------
+The non-negative Momentum/Breakout rules are additional live
+eligibility constraints. They must be independently backtested
+before being considered statistically validated.
 
-This is a production signal engine.
-
-It does NOT run the full strategy grid.
-
-The research/backtest engine is separate.
-
-Bear-market overlay is calculated as a MONITOR only and is
-disabled by default because the locked strategy contains R0
-(no regime filter).
-
-Execution model:
-
-    Signal generated after completed month-end data.
-    Orders are intended for the next trading session.
-
-Portfolio:
-
-    Capital = Rs. 100,000
-    Target holdings = 10
-    Equal weight = Rs. 10,000 per position
+This is a research and decision-support system.
+It does not guarantee future returns.
 """
+
+# ============================================================
+# IMPORTS
+# ============================================================
 
 from __future__ import annotations
 
-# ============================================================
-# STANDARD LIBRARY
-# ============================================================
-
 import importlib.util
-import math
-import os
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
-
-# ============================================================
-# THIRD-PARTY
-# ============================================================
+from typing import Optional
 
 import numpy as np
 import pandas as pd
-
-try:
-    import openpyxl  # noqa: F401
-    OPENPYXL_AVAILABLE = True
-except ImportError:
-    OPENPYXL_AVAILABLE = False
 
 
 # ============================================================
 # PROJECT PATHS
 # ============================================================
 
-CURRENT_FILE = Path(__file__).resolve()
-PROJECT_ROOT = CURRENT_FILE.parents[2]
-SRC_ROOT = CURRENT_FILE.parents[1]
-LAB_ROOT = CURRENT_FILE.parent
+LAB_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = LAB_ROOT.parent.parent
 
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+UNIVERSE_FILE = PROJECT_ROOT / "universe.py"
 
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+RESULTS_DIR = LAB_ROOT / "results"
+CACHE_DIR = LAB_ROOT / "cache"
+
+RESULTS_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
+
+CACHE_DIR.mkdir(
+    parents=True,
+    exist_ok=True,
+)
+
+
+# ============================================================
+# PROJECT IMPORT
+# ============================================================
 
 if str(LAB_ROOT) not in sys.path:
-    sys.path.insert(0, str(LAB_ROOT))
+    sys.path.insert(
+        0,
+        str(LAB_ROOT),
+    )
 
-
-# ============================================================
-# PROJECT IMPORTS
-# ============================================================
 
 try:
     import trade_data
-except Exception as exc:
-    raise RuntimeError(
-        f"Unable to import trade_data.py.\n"
-        f"Expected location: {LAB_ROOT / 'trade_data.py'}\n"
-        f"Original error: {exc}"
+
+except ImportError as exc:
+
+    raise ImportError(
+        "Could not import trade_data.py. "
+        f"Expected it under: {LAB_ROOT}"
     ) from exc
 
 
@@ -130,371 +139,302 @@ except Exception as exc:
 
 PROJECT_NAME = "MONTHLYMOMENTUMLAB"
 
-STRATEGY_NAME = "COMB_M9S0_B6_V1.5_T0_R0_N10_RB1"
+STRATEGY_NAME = (
+    "COMB_M9S0_B6_V1.5_T0_R0_N10_RB1"
+)
 
-# ------------------------------------------------------------
-# Strategy parameters
-# ------------------------------------------------------------
+
+# ============================================================
+# CORE STRATEGY PARAMETERS
+# ============================================================
 
 MOMENTUM_MONTHS = 9
+
 BREAKOUT_MONTHS = 6
 
 VOLUME_MULTIPLIER = 1.50
 
+VOLUME_AVERAGE_MONTHS = 3
+
+
+# ============================================================
+# LIVE HARD FILTERS
+# ============================================================
+
+REQUIRE_NON_NEGATIVE_MOMENTUM = True
+
+REQUIRE_NON_NEGATIVE_BREAKOUT = True
+
+REQUIRE_VOLUME_CONFIRMATION = True
+
+
+# ============================================================
+# PORTFOLIO PARAMETERS
+# ============================================================
+
 TOP_RESEARCH_STOCKS = 30
+
 TOP_PORTFOLIO_STOCKS = 10
 
-# ------------------------------------------------------------
-# Data parameters
-# ------------------------------------------------------------
+TOTAL_CAPITAL = 100_000.0
+
+
+# ============================================================
+# DATA PARAMETERS
+# ============================================================
 
 HISTORICAL_PERIOD = "5y"
 
 MIN_MONTHS_REQUIRED = 15
 
-# ------------------------------------------------------------
-# Portfolio parameters
-# ------------------------------------------------------------
 
-TOTAL_CAPITAL = 100_000.0
+# ============================================================
+# REGIME PARAMETERS
+# ============================================================
 
-# ------------------------------------------------------------
-# Bear overlay
-# ------------------------------------------------------------
-
-# IMPORTANT:
-#
-# The locked strategy is R0 = NO REGIME FILTER.
-#
-# Therefore this must remain False unless independently
-# backtested and intentionally enabled.
-#
 ENABLE_BEAR_OVERLAY = False
 
-# ------------------------------------------------------------
-# Output parameters
-# ------------------------------------------------------------
 
-RESULTS_DIR = LAB_ROOT / "results"
-CACHE_DIR = LAB_ROOT / "cache"
-
-RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+# ============================================================
+# OUTPUT FILES
+# ============================================================
 
 MONTHLY_CACHE_FILE = (
-    CACHE_DIR / "monthly_market_cache_production_v1.pkl"
+    CACHE_DIR
+    / "monthly_market_cache_production_v1.pkl"
 )
 
 CURRENT_SIGNAL_FILE = (
-    RESULTS_DIR / "current_monthly_signal.csv"
+    RESULTS_DIR
+    / "current_monthly_signal.csv"
 )
 
 TOP30_FILE = (
-    RESULTS_DIR / "current_monthly_top30.csv"
+    RESULTS_DIR
+    / "current_monthly_top30.csv"
 )
 
 ORDERS_FILE = (
-    RESULTS_DIR / "current_monthly_orders.csv"
+    RESULTS_DIR
+    / "current_monthly_orders.csv"
 )
 
 RUN_SUMMARY_FILE = (
-    RESULTS_DIR / "current_monthly_run_summary.csv"
+    RESULTS_DIR
+    / "current_monthly_run_summary.csv"
 )
 
 HOLDINGS_FILE = (
-    RESULTS_DIR / "current_holdings.csv"
+    RESULTS_DIR
+    / "current_holdings.csv"
 )
 
 EXCEL_FILE = (
-    RESULTS_DIR / "monthly_momentum_lab_live_signal.xlsx"
+    RESULTS_DIR
+    / "monthly_momentum_lab_live_signal.xlsx"
 )
 
 
 # ============================================================
-# DISPLAY HELPERS
-# ============================================================
-
-LINE = "=" * 100
-THIN_LINE = "-" * 100
-
-
-def print_header() -> None:
-
-    print()
-    print(LINE)
-    print(PROJECT_NAME)
-    print(LINE)
-    print("PRODUCTION MONTHLY MOMENTUM + BREAKOUT SIGNAL ENGINE")
-    print()
-    print("Locked strategy:")
-    print(f"    {STRATEGY_NAME}")
-    print()
-    print("Research design:")
-    print("    Monthly signal timeframe")
-    print("    9-month momentum")
-    print("    6-month breakout")
-    print("    1.5x monthly volume confirmation")
-    print("    No trend filter")
-    print("    No market regime filter")
-    print("    Top 30 research universe")
-    print("    Top 10 portfolio")
-    print("    Monthly rebalance")
-    print(LINE)
-    print()
-
-
-def print_stage(message: str) -> None:
-    print()
-    print(THIN_LINE)
-    print(message)
-    print(THIN_LINE)
-
-
-# ============================================================
-# TIMING
+# TIMER
 # ============================================================
 
 class Timer:
 
-    def __init__(self) -> None:
+    def __init__(self):
+
         self.start = time.perf_counter()
 
     def elapsed(self) -> float:
-        return time.perf_counter() - self.start
 
-
-def format_seconds(seconds: float) -> str:
-
-    if seconds < 60:
-        return f"{seconds:.2f}s"
-
-    minutes = int(seconds // 60)
-    remaining = seconds - minutes * 60
-
-    return f"{minutes}m {remaining:.1f}s"
-
-
-# ============================================================
-# GENERIC HELPERS
-# ============================================================
-
-def safe_float(value: Any) -> Optional[float]:
-
-    try:
-
-        if value is None:
-            return None
-
-        value = float(value)
-
-        if not math.isfinite(value):
-            return None
-
-        return value
-
-    except Exception:
-        return None
-
-
-def clean_symbol(symbol: Any) -> str:
-
-    if symbol is None:
-        return ""
-
-    symbol = str(symbol).strip().upper()
-
-    if not symbol:
-        return ""
-
-    if symbol.endswith(".NS"):
-        return symbol
-
-    return f"{symbol}.NS"
-
-
-def strip_exchange_suffix(symbol: Any) -> str:
-
-    symbol = str(symbol).strip().upper()
-
-    if symbol.endswith(".NS"):
-        return symbol[:-3]
-
-    return symbol
-
-
-def flatten_columns(data: pd.DataFrame) -> pd.DataFrame:
-
-    data = data.copy()
-
-    if not isinstance(data.columns, pd.MultiIndex):
-        return data
-
-    new_columns = []
-
-    for col in data.columns:
-
-        parts = [
-            str(x).strip()
-            for x in col
-            if str(x).strip().lower() != "nan"
-        ]
-
-        new_columns.append("_".join(parts))
-
-    data.columns = new_columns
-
-    return data
-
-
-def normalize_index(data: pd.DataFrame) -> pd.DataFrame:
-
-    data = data.copy()
-
-    try:
-        data.index = pd.to_datetime(
-            data.index,
-            errors="coerce",
+        return (
+            time.perf_counter()
+            - self.start
         )
 
-        data = data.loc[~data.index.isna()]
 
-        data = data.sort_index()
+# ============================================================
+# PRINT HELPERS
+# ============================================================
 
-    except Exception:
-        pass
+def print_header(
+    title: str,
+) -> None:
 
-    return data
+    print()
+
+    print(
+        "=" * 100
+    )
+
+    print(
+        title
+    )
+
+    print(
+        "=" * 100
+    )
+
+
+def print_subheader(
+    title: str,
+) -> None:
+
+    print()
+
+    print(
+        "-" * 100
+    )
+
+    print(
+        title
+    )
+
+    print(
+        "-" * 100
+    )
 
 
 # ============================================================
-# UNIVERSE LOADING
+# SAFE HELPERS
+# ============================================================
+
+def clean_symbol(
+    symbol: str,
+) -> str:
+
+    value = (
+        str(symbol)
+        .strip()
+        .upper()
+    )
+
+    if not value.endswith(".NS"):
+
+        value = (
+            f"{value}.NS"
+        )
+
+    return value
+
+
+def safe_float(
+    value,
+) -> float:
+
+    try:
+
+        if pd.isna(value):
+
+            return np.nan
+
+        return float(value)
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return np.nan
+
+
+# ============================================================
+# REFRESH NIFTY 500
 # ============================================================
 
 def refresh_universe_if_available() -> None:
 
-    """
-    Use the existing trade_data.py universe refresh function
-    if available.
-
-    We intentionally do not implement another Nifty 500 scraper
-    here because trade_data.py is the project's existing data
-    foundation.
-    """
-
-    candidates = [
+    candidate_functions = [
         "refresh_nifty500_universe",
-        "refresh_nifty_500_universe",
         "update_nifty500_universe",
-        "update_nifty_500_universe",
+        "refresh_universe",
+        "update_universe",
     ]
 
-    for function_name in candidates:
+    function = None
 
-        function = getattr(
+    for name in candidate_functions:
+
+        candidate = getattr(
             trade_data,
-            function_name,
+            name,
             None,
         )
 
-        if callable(function):
+        if callable(candidate):
 
-            print(
-                f"Universe refresh function : "
-                f"{function_name}"
-            )
+            function = candidate
 
-            try:
-                result = function()
+            break
 
-                if result is not None:
-                    print(
-                        f"Universe refresh result   : "
-                        f"{type(result).__name__}"
-                    )
+    if function is None:
 
-            except TypeError:
+        print(
+            "Universe refresh function not found."
+        )
 
-                # Some existing implementations may not
-                # require arguments but may expose a slightly
-                # different callable contract.
-                try:
-                    function()
-                except Exception as exc:
-                    print(
-                        "WARNING: Universe refresh failed."
-                    )
-                    print(f"Reason: {exc}")
-
-            except Exception as exc:
-
-                print(
-                    "WARNING: Universe refresh failed."
-                )
-                print(f"Reason: {exc}")
-
-            return
+        return
 
     print(
-        "Universe refresh function : "
-        "Not available in trade_data.py"
+        "Updating Nifty 500 universe..."
     )
 
+    function()
 
-def load_universe_symbols() -> List[str]:
 
-    """
-    Load symbols from the project's existing universe.py.
+# ============================================================
+# LOAD UNIVERSE
+# ============================================================
 
-    Expected location:
+def load_universe_symbols() -> list[str]:
 
-        InvestmentResearchLab/universe.py
-    """
-
-    universe_candidates = [
-        PROJECT_ROOT / "universe.py",
-        SRC_ROOT / "universe.py",
+    possible_locations = [
+        UNIVERSE_FILE,
+        PROJECT_ROOT / "src" / "universe.py",
         LAB_ROOT / "universe.py",
     ]
 
-    universe_file = None
+    universe_path = None
 
-    for candidate in universe_candidates:
+    for path in possible_locations:
 
-        if candidate.exists():
-            universe_file = candidate
+        if path.exists():
+
+            universe_path = path
+
             break
 
-    if universe_file is None:
+    if universe_path is None:
 
         raise FileNotFoundError(
-            "Could not find universe.py.\n"
-            "Expected one of:\n"
-            + "\n".join(
-                f"  {p}"
-                for p in universe_candidates
-            )
+            "Could not find universe.py."
         )
 
-    print(
-        f"Universe file              : "
-        f"{universe_file}"
+    spec = (
+        importlib.util
+        .spec_from_file_location(
+            "generated_universe",
+            universe_path,
+        )
     )
 
-    spec = importlib.util.spec_from_file_location(
-        "monthly_momentum_universe",
-        universe_file,
-    )
+    if (
+        spec is None
+        or spec.loader is None
+    ):
 
-    if spec is None or spec.loader is None:
-
-        raise RuntimeError(
-            f"Could not load universe.py: "
-            f"{universe_file}"
+        raise ImportError(
+            "Could not load universe.py."
         )
 
-    module = importlib.util.module_from_spec(spec)
+    module = (
+        importlib.util
+        .module_from_spec(spec)
+    )
 
-    spec.loader.exec_module(module)
+    spec.loader.exec_module(
+        module
+    )
 
     possible_names = [
         "NIFTY_500_SYMBOLS",
@@ -505,407 +445,220 @@ def load_universe_symbols() -> List[str]:
         "NIFTY500",
     ]
 
-    raw_symbols = None
+    symbols = None
 
     for name in possible_names:
 
-        if hasattr(module, name):
-
-            value = getattr(module, name)
-
-            if isinstance(
-                value,
-                (list, tuple, set),
-            ):
-                raw_symbols = value
-                break
-
-    if raw_symbols is None:
-
-        raise RuntimeError(
-            "Could not find a symbol list in universe.py.\n"
-            f"Checked: {possible_names}"
+        value = getattr(
+            module,
+            name,
+            None,
         )
 
-    symbols = []
+        if value is not None:
 
-    seen = set()
+            symbols = value
 
-    for symbol in raw_symbols:
+            break
 
-        cleaned = clean_symbol(symbol)
+    if symbols is None:
 
-        if not cleaned:
-            continue
-
-        if cleaned in seen:
-            continue
-
-        seen.add(cleaned)
-        symbols.append(cleaned)
-
-    if not symbols:
-
-        raise RuntimeError(
-            "Universe loaded successfully but "
-            "contains zero symbols."
+        raise AttributeError(
+            "universe.py does not contain a recognized "
+            "Nifty 500 symbol list."
         )
 
-    print(
-        f"Universe symbols           : "
-        f"{len(symbols)}"
+    if not isinstance(
+        symbols,
+        (
+            list,
+            tuple,
+            set,
+        ),
+    ):
+
+        raise TypeError(
+            "Universe symbols must be a list, tuple or set."
+        )
+
+    cleaned = []
+
+    for symbol in symbols:
+
+        value = (
+            str(symbol)
+            .strip()
+            .upper()
+        )
+
+        if not value:
+
+            continue
+
+        cleaned.append(
+            clean_symbol(value)
+        )
+
+    symbols = sorted(
+        set(cleaned)
     )
+
+    if len(symbols) < 400:
+
+        raise ValueError(
+            f"Only {len(symbols)} symbols found. "
+            "Expected a valid Nifty 500 universe."
+        )
 
     return symbols
 
 
 # ============================================================
-# MARKET DATA FUNCTION DISCOVERY
+# FIND MARKET DATA FUNCTION
 # ============================================================
 
-def find_market_data_function() -> Callable[..., Any]:
+def find_market_data_function():
 
-    """
-    Find the existing historical market data loader.
-
-    Current project function:
-
-        get_historical_market_data_for_symbols
-    """
-
-    candidates = [
+    candidate_functions = [
         "get_historical_market_data_for_symbols",
         "get_historical_market_data",
         "download_historical_market_data",
         "load_historical_market_data",
     ]
 
-    for function_name in candidates:
+    for name in candidate_functions:
 
         function = getattr(
             trade_data,
-            function_name,
+            name,
             None,
         )
 
         if callable(function):
 
-            print(
-                f"Loader function           : "
-                f"{function_name}"
-            )
-
             return function
 
     raise AttributeError(
-        "Could not find a historical market data "
-        "function in trade_data.py.\n"
-        f"Expected one of: {candidates}"
+        "Could not find a historical market-data "
+        "function in trade_data.py."
     )
 
 
 # ============================================================
-# MARKET DATA NORMALIZATION
+# NORMALIZE MARKET DATA
 # ============================================================
 
 def normalize_market_data(
-    raw_data: pd.DataFrame,
-    symbols: Sequence[str],
+    data: pd.DataFrame,
 ) -> pd.DataFrame:
 
-    """
-    Normalize yfinance/trade_data output into:
+    if data is None:
 
-        index = DatetimeIndex
-
-        columns = MultiIndex
-            level 0 = OHLCV field
-            level 1 = symbol
-
-    Target structure:
-
-        Open
-        High
-        Low
-        Close
-        Adj Close
-        Volume
-
-    Each containing Nifty symbols.
-    """
-
-    if raw_data is None:
         raise ValueError(
             "Market data is None."
         )
 
     if not isinstance(
-        raw_data,
+        data,
         pd.DataFrame,
     ):
+
         raise TypeError(
-            f"Market data must be a DataFrame, "
-            f"got {type(raw_data)}"
+            "Market data must be a pandas DataFrame."
         )
-
-    data = raw_data.copy()
 
     if data.empty:
+
         raise ValueError(
-            "Market data DataFrame is empty."
+            "Market data is empty."
         )
 
-    data = normalize_index(data)
-
-    if data.empty:
-        raise ValueError(
-            "Market data became empty after "
-            "datetime normalization."
-        )
+    result = data.copy()
 
     # --------------------------------------------------------
-    # Already normalized MultiIndex
+    # MultiIndex columns
     # --------------------------------------------------------
 
     if isinstance(
-        data.columns,
+        result.columns,
         pd.MultiIndex,
     ):
 
-        level0 = [
-            str(x).strip().lower()
-            for x in data.columns.get_level_values(0)
+        if result.columns.nlevels != 2:
+
+            raise ValueError(
+                "Unsupported MultiIndex market-data structure."
+            )
+
+        level_0 = [
+            str(x).strip()
+            for x in result.columns
+            .get_level_values(0)
         ]
 
-        level1 = [
-            str(x).strip().upper()
-            for x in data.columns.get_level_values(1)
+        level_1 = [
+            str(x).strip()
+            for x in result.columns
+            .get_level_values(1)
         ]
 
-        price_names = {
-            "open",
-            "high",
-            "low",
-            "close",
-            "adj close",
-            "adj_close",
-            "volume",
-        }
-
-        level0_price_count = sum(
-            x in price_names
-            for x in level0
-        )
-
-        level1_price_count = sum(
-            x in price_names
-            for x in level1
-        )
-
-        # Standard yfinance:
-        #
-        # (Price, Ticker)
-        #
-        if level0_price_count >= level1_price_count:
-
-            normalized_columns = []
-
-            for price, symbol in data.columns:
-
-                price = str(price).strip()
-
-                symbol = clean_symbol(symbol)
-
-                if price.lower() == "adj_close":
-                    price = "Adj Close"
-
-                normalized_columns.append(
-                    (
-                        price,
-                        symbol,
-                    )
-                )
-
-            data.columns = pd.MultiIndex.from_tuples(
-                normalized_columns,
-                names=[
-                    "Field",
-                    "Symbol",
-                ],
-            )
-
-            return data
-
-        # Alternative:
-        #
-        # (Ticker, Price)
-        #
-        normalized_columns = []
-
-        for symbol, price in data.columns:
-
-            symbol = clean_symbol(symbol)
-
-            price = str(price).strip()
-
-            if price.lower() == "adj_close":
-                price = "Adj Close"
-
-            normalized_columns.append(
-                (
-                    price,
-                    symbol,
-                )
-            )
-
-        data.columns = pd.MultiIndex.from_tuples(
-            normalized_columns,
-            names=[
-                "Field",
-                "Symbol",
-            ],
-        )
-
-        return data
-
-    # --------------------------------------------------------
-    # Single-level columns
-    # --------------------------------------------------------
-
-    # If only one symbol was downloaded, trade_data may return:
-    #
-    # Open, High, Low, Close, Volume
-    #
-    price_columns = {
-        "open",
-        "high",
-        "low",
-        "close",
-        "adj close",
-        "adj_close",
-        "volume",
-    }
-
-    normalized_single = [
-        str(col).strip()
-        for col in data.columns
-    ]
-
-    if all(
-        col.lower() in price_columns
-        for col in normalized_single
-    ):
-
-        symbol = (
-            clean_symbol(symbols[0])
-            if symbols
-            else "UNKNOWN.NS"
-        )
-
-        tuples = []
-
-        for col in normalized_single:
-
-            clean_col = col
-
-            if clean_col.lower() == "adj_close":
-                clean_col = "Adj Close"
-
-            tuples.append(
-                (
-                    clean_col,
-                    symbol,
-                )
-            )
-
-        data.columns = pd.MultiIndex.from_tuples(
-            tuples,
-            names=[
-                "Field",
-                "Symbol",
-            ],
-        )
-
-        return data
-
-    # --------------------------------------------------------
-    # Flat ticker columns
-    # --------------------------------------------------------
-
-    # Attempt to interpret columns such as:
-    #
-    # RELIANCE.NS_Close
-    # RELIANCE.NS_Volume
-    #
-    flat_columns = []
-
-    for col in data.columns:
-
-        text = str(col).strip()
-
-        matched = False
-
-        for field in [
-            "Adj Close",
-            "Close",
+        price_fields = {
             "Open",
             "High",
             "Low",
+            "Close",
+            "Adj Close",
             "Volume",
-        ]:
+        }
 
-            suffix = "_" + field
-
-            if text.endswith(suffix):
-
-                symbol = text[
-                    : -len(suffix)
-                ]
-
-                flat_columns.append(
-                    (
-                        field,
-                        clean_symbol(symbol),
-                    )
-                )
-
-                matched = True
-                break
-
-        if not matched:
-            flat_columns.append(
-                (
-                    text,
-                    "",
-                )
-            )
-
-    if all(
-        field in price_columns
-        for field, _ in [
-            (
-                str(x[0]).lower(),
-                x[1],
-            )
-            for x in flat_columns
-        ]
-    ):
-
-        data.columns = pd.MultiIndex.from_tuples(
-            flat_columns,
-            names=[
-                "Field",
-                "Symbol",
-            ],
+        level_0_price_count = sum(
+            x in price_fields
+            for x in level_0
         )
 
-        return data
+        level_1_price_count = sum(
+            x in price_fields
+            for x in level_1
+        )
 
-    raise ValueError(
-        "Unsupported market-data column structure.\n"
-        f"Column type: {type(data.columns)}\n"
-        f"First columns: {list(data.columns[:10])}"
-    )
+        if (
+            level_0_price_count
+            >=
+            level_1_price_count
+        ):
+
+            result.columns = (
+                pd.MultiIndex.from_arrays(
+                    [
+                        level_0,
+                        level_1,
+                    ]
+                )
+            )
+
+        else:
+
+            result.columns = (
+                pd.MultiIndex.from_arrays(
+                    [
+                        level_1,
+                        level_0,
+                    ]
+                )
+            )
+
+        return result
+
+    # --------------------------------------------------------
+    # Flat columns
+    # --------------------------------------------------------
+
+    result.columns = [
+        str(column).strip()
+        for column in result.columns
+    ]
+
+    return result
 
 
 # ============================================================
@@ -913,84 +666,34 @@ def normalize_market_data(
 # ============================================================
 
 def load_daily_market_data(
-    symbols: Sequence[str],
-) -> Tuple[pd.DataFrame, List[str]]:
+    symbols: list[str],
+) -> tuple[pd.DataFrame, list[str]]:
 
-    """
-    Load historical daily market data from trade_data.py.
-
-    IMPORTANT:
-
-    The project's trade_data.py returns:
-
-        data, valid_symbols
-
-    rather than only:
-
-        data
-
-    This function explicitly handles that tuple.
-    """
-
-    function = find_market_data_function()
-
-    print(
-        f"Symbols                    : "
-        f"{len(symbols)}"
+    function = (
+        find_market_data_function()
     )
 
+    print()
+
     print(
-        f"Period                     : "
-        f"{HISTORICAL_PERIOD}"
+        "Loading 5-year daily market data "
+        "through trade_data.py..."
     )
 
-    # --------------------------------------------------------
-    # Call existing project loader
-    # --------------------------------------------------------
+    timer = Timer()
 
-    try:
+    raw_result = function(
+        symbols,
+        period=HISTORICAL_PERIOD,
+    )
 
-        raw_result = function(
-            symbols,
-            period=HISTORICAL_PERIOD,
-        )
-
-    except TypeError:
-
-        # Fallback for implementations using a different
-        # parameter name or positional-only period.
-
-        try:
-
-            raw_result = function(
-                symbols,
-                HISTORICAL_PERIOD,
-            )
-
-        except Exception as exc:
-
-            raise RuntimeError(
-                "Historical market data loader failed.\n"
-                f"Original error: {exc}"
-            ) from exc
-
-    except Exception as exc:
-
-        raise RuntimeError(
-            "Historical market data loader failed.\n"
-            f"Original error: {exc}"
-        ) from exc
+    valid_symbols = symbols.copy()
 
     # --------------------------------------------------------
-    # IMPORTANT FIX:
-    #
-    # trade_data.py returns:
+    # Normal expected return:
     #
     #     data, valid_symbols
-    #
     # --------------------------------------------------------
-
-    valid_symbols: List[str] = []
 
     if isinstance(
         raw_result,
@@ -999,159 +702,53 @@ def load_daily_market_data(
 
         if len(raw_result) < 1:
 
-            raise RuntimeError(
+            raise ValueError(
                 "trade_data.py returned an empty tuple."
             )
 
         raw_data = raw_result[0]
 
-        if len(raw_result) >= 2:
+        if (
+            len(raw_result) >= 2
+            and raw_result[1] is not None
+        ):
 
-            candidate_valid_symbols = (
-                raw_result[1]
-            )
-
-            if candidate_valid_symbols is not None:
-
-                try:
-
-                    valid_symbols = [
-                        clean_symbol(x)
-                        for x in candidate_valid_symbols
-                        if clean_symbol(x)
-                    ]
-
-                except Exception:
-                    valid_symbols = []
+            valid_symbols = [
+                clean_symbol(symbol)
+                for symbol in raw_result[1]
+            ]
 
     elif isinstance(
         raw_result,
         pd.DataFrame,
     ):
 
-        # Support loaders that return DataFrame only.
         raw_data = raw_result
 
     else:
 
-        raise RuntimeError(
-            "Unsupported market-data object returned "
-            "by trade_data.py: "
-            f"{type(raw_result)}"
+        raise TypeError(
+            "Unsupported market-data object returned by "
+            f"trade_data.py: {type(raw_result)}"
         )
-
-    # --------------------------------------------------------
-    # Validate
-    # --------------------------------------------------------
-
-    if not isinstance(
-        raw_data,
-        pd.DataFrame,
-    ):
-
-        raise RuntimeError(
-            "trade_data.py returned an unsupported "
-            "data object inside its result: "
-            f"{type(raw_data)}"
-        )
-
-    if raw_data.empty:
-
-        raise RuntimeError(
-            "trade_data.py returned an empty DataFrame."
-        )
-
-    # If trade_data.py did not provide valid symbols,
-    # derive them from requested symbols.
-    if not valid_symbols:
-
-        valid_symbols = [
-            clean_symbol(x)
-            for x in symbols
-            if clean_symbol(x)
-        ]
-
-    # --------------------------------------------------------
-    # Normalize
-    # --------------------------------------------------------
 
     data = normalize_market_data(
-        raw_data,
+        raw_data
+    )
+
+    print(
+        f"Daily data loaded in "
+        f"{timer.elapsed():.2f}s"
+    )
+
+    print(
+        f"Daily shape: {data.shape}"
+    )
+
+    return (
+        data,
         valid_symbols,
     )
-
-    # --------------------------------------------------------
-    # Remove completely empty columns
-    # --------------------------------------------------------
-
-    data = data.dropna(
-        axis=1,
-        how="all",
-    )
-
-    # --------------------------------------------------------
-    # Final validation
-    # --------------------------------------------------------
-
-    if data.empty:
-
-        raise RuntimeError(
-            "Normalized market data is empty."
-        )
-
-    close_count = 0
-
-    if isinstance(
-        data.columns,
-        pd.MultiIndex,
-    ):
-
-        fields = [
-            str(x).strip().lower()
-            for x in data.columns.get_level_values(0)
-        ]
-
-        close_count = fields.count("close")
-
-    if close_count == 0:
-
-        raise RuntimeError(
-            "Normalized market data contains no "
-            "Close columns."
-        )
-
-    print()
-    print(
-        f"Requested symbols          : "
-        f"{len(symbols)}"
-    )
-
-    print(
-        f"Valid symbols              : "
-        f"{len(valid_symbols)}"
-    )
-
-    print(
-        f"Invalid symbols            : "
-        f"{max(0, len(symbols) - len(valid_symbols))}"
-    )
-
-    print(
-        f"Daily data shape           : "
-        f"{data.shape}"
-    )
-
-    print(
-        f"Daily start                : "
-        f"{data.index.min().date()}"
-    )
-
-    print(
-        f"Daily end                  : "
-        f"{data.index.max().date()}"
-    )
-
-    return data, valid_symbols
 
 
 # ============================================================
@@ -1163,196 +760,309 @@ def get_field(
     field: str,
 ) -> pd.DataFrame:
 
-    """
-    Extract one OHLCV field from normalized MultiIndex data.
-    """
+    # --------------------------------------------------------
+    # MultiIndex
+    # --------------------------------------------------------
 
-    if not isinstance(
+    if isinstance(
         data.columns,
         pd.MultiIndex,
     ):
 
-        raise ValueError(
-            "Expected MultiIndex market data."
-        )
+        fields_level_0 = [
+            str(x).strip()
+            for x in data.columns
+            .get_level_values(0)
+        ]
 
-    field_lower = field.lower()
+        fields_level_1 = [
+            str(x).strip()
+            for x in data.columns
+            .get_level_values(1)
+        ]
 
-    fields = (
-        data.columns
-        .get_level_values(0)
-        .astype(str)
-        .str.strip()
-        .str.lower()
+        if field in fields_level_0:
+
+            selected = data.xs(
+                field,
+                axis=1,
+                level=0,
+            )
+
+        elif field in fields_level_1:
+
+            selected = data.xs(
+                field,
+                axis=1,
+                level=1,
+            )
+
+        else:
+
+            raise KeyError(
+                f"Field '{field}' not found."
+            )
+
+        selected = selected.copy()
+
+        selected.columns = [
+            clean_symbol(column)
+            for column in selected.columns
+        ]
+
+        return selected
+
+    # --------------------------------------------------------
+    # Flat columns
+    # --------------------------------------------------------
+
+    columns = [
+        str(column)
+        for column in data.columns
+    ]
+
+    if field in columns:
+
+        return data[
+            [field]
+        ].copy()
+
+    suffix = (
+        f"_{field}"
     )
 
-    matching_columns = [
-        col
-        for col, field_name in zip(
-            data.columns,
-            fields,
+    matching = [
+        column
+        for column in columns
+        if column.endswith(
+            suffix
         )
-        if field_name == field_lower
     ]
 
-    if not matching_columns:
+    if matching:
 
-        raise KeyError(
-            f"Field '{field}' not found in market data."
-        )
+        result = data[
+            matching
+        ].copy()
 
-    result = data.loc[:, matching_columns].copy()
+        result.columns = [
+            clean_symbol(
+                column[
+                    :-len(suffix)
+                ]
+            )
+            for column in matching
+        ]
 
-    symbols = [
-        clean_symbol(col[1])
-        for col in matching_columns
-    ]
+        return result
 
-    result.columns = symbols
-
-    # Remove duplicate symbol columns if any.
-    result = result.loc[
-        :,
-        ~result.columns.duplicated(),
-    ]
-
-    return result
+    raise KeyError(
+        f"Could not extract field '{field}'."
+    )
 
 
 # ============================================================
-# COMPLETED MONTHLY DATA
+# DAILY TO COMPLETED MONTHLY
 # ============================================================
 
 def convert_daily_to_completed_monthly(
     data: pd.DataFrame,
 ) -> pd.DataFrame:
 
-    """
-    Convert daily OHLCV data into completed calendar-month bars.
+    timer = Timer()
 
-    IMPORTANT:
+    print()
 
-    The current incomplete month is excluded.
+    print(
+        "Converting daily OHLCV to completed monthly data..."
+    )
 
-    This prevents the production signal from using a partially
-    completed month.
-    """
+    if not isinstance(
+        data.index,
+        pd.DatetimeIndex,
+    ):
 
-    close = get_field(
+        data.index = pd.to_datetime(
+            data.index
+        )
+
+    data = data.sort_index()
+
+    # --------------------------------------------------------
+    # Extract fields
+    # --------------------------------------------------------
+
+    close_df = get_field(
         data,
         "Close",
     )
 
-    high = get_field(
+    high_df = get_field(
         data,
         "High",
     )
 
-    low = get_field(
+    low_df = get_field(
         data,
         "Low",
     )
 
-    volume = get_field(
+    volume_df = get_field(
         data,
         "Volume",
     )
 
     # --------------------------------------------------------
-    # Month-end OHLCV
-    # --------------------------------------------------------
-
-    monthly_close = close.resample(
-        "ME"
-    ).last()
-
-    monthly_high = high.resample(
-        "ME"
-    ).max()
-
-    monthly_low = low.resample(
-        "ME"
-    ).min()
-
-    monthly_volume = volume.resample(
-        "ME"
-    ).sum(min_count=1)
-
-    # --------------------------------------------------------
     # Exclude current incomplete month
     # --------------------------------------------------------
 
-    today = pd.Timestamp.now().normalize()
-
-    current_month_start = (
-        today.to_period("M")
-        .to_timestamp()
+    today = (
+        pd.Timestamp.now()
+        .normalize()
     )
 
-    monthly_close = monthly_close.loc[
-        monthly_close.index
-        < current_month_start
-    ]
+    current_month_start = (
+        today.replace(
+            day=1
+        )
+    )
 
-    monthly_high = monthly_high.loc[
-        monthly_high.index
-        < current_month_start
-    ]
+    close_completed = (
+        close_df.loc[
+            close_df.index
+            < current_month_start
+        ]
+    )
 
-    monthly_low = monthly_low.loc[
-        monthly_low.index
-        < current_month_start
-    ]
+    high_completed = (
+        high_df.loc[
+            high_df.index
+            < current_month_start
+        ]
+    )
 
-    monthly_volume = monthly_volume.loc[
-        monthly_volume.index
-        < current_month_start
-    ]
+    low_completed = (
+        low_df.loc[
+            low_df.index
+            < current_month_start
+        ]
+    )
+
+    volume_completed = (
+        volume_df.loc[
+            volume_df.index
+            < current_month_start
+        ]
+    )
+
+    if close_completed.empty:
+
+        raise ValueError(
+            "No completed monthly data available."
+        )
 
     # --------------------------------------------------------
-    # Build standardized monthly DataFrame
+    # Resample
     # --------------------------------------------------------
 
-    monthly_parts = []
+    close_monthly = (
+        close_completed
+        .resample("ME")
+        .last()
+    )
 
-    for symbol in monthly_close.columns:
+    high_monthly = (
+        high_completed
+        .resample("ME")
+        .max()
+    )
 
-        frame = pd.DataFrame(
+    low_monthly = (
+        low_completed
+        .resample("ME")
+        .min()
+    )
+
+    volume_monthly = (
+        volume_completed
+        .resample("ME")
+        .sum()
+    )
+
+    # --------------------------------------------------------
+    # Symbols common to all OHLCV fields
+    # --------------------------------------------------------
+
+    symbols = sorted(
+        set(close_monthly.columns)
+        &
+        set(high_monthly.columns)
+        &
+        set(low_monthly.columns)
+        &
+        set(volume_monthly.columns)
+    )
+
+    if not symbols:
+
+        raise ValueError(
+            "No symbols have complete monthly OHLCV data."
+        )
+
+    # --------------------------------------------------------
+    # Build long format
+    # --------------------------------------------------------
+
+    records = []
+
+    for symbol in symbols:
+
+        temp = pd.DataFrame(
             {
-                "Close": monthly_close[symbol],
-                "High": monthly_high[symbol],
-                "Low": monthly_low[symbol],
-                "Volume": monthly_volume[symbol],
+                "Date": close_monthly.index,
+                "Symbol": symbol,
+                "Close": close_monthly[
+                    symbol
+                ].values,
+                "High": high_monthly[
+                    symbol
+                ].values,
+                "Low": low_monthly[
+                    symbol
+                ].values,
+                "Volume": volume_monthly[
+                    symbol
+                ].values,
             }
         )
 
-        frame["Symbol"] = symbol
+        temp = temp.dropna(
+            subset=[
+                "Close",
+            ]
+        )
 
-        frame = frame.reset_index()
+        if temp.empty:
 
-        monthly_parts.append(frame)
+            continue
 
-    if not monthly_parts:
+        records.append(
+            temp
+        )
 
-        raise RuntimeError(
-            "No monthly data could be constructed."
+    if not records:
+
+        raise ValueError(
+            "No usable monthly records were created."
         )
 
     monthly = pd.concat(
-        monthly_parts,
+        records,
         ignore_index=True,
     )
 
-    monthly.rename(
-        columns={
-            "Date": "Month",
-        },
-        inplace=True,
-    )
-
-    monthly["Month"] = pd.to_datetime(
-        monthly["Month"],
-        errors="coerce",
+    monthly["Date"] = pd.to_datetime(
+        monthly["Date"]
     )
 
     monthly["Symbol"] = (
@@ -1361,29 +1071,75 @@ def convert_daily_to_completed_monthly(
         .map(clean_symbol)
     )
 
-    monthly = monthly.dropna(
-        subset=[
-            "Month",
-            "Close",
-        ]
-    )
+    # --------------------------------------------------------
+    # Numeric conversion
+    # --------------------------------------------------------
+
+    for column in [
+        "Close",
+        "High",
+        "Low",
+        "Volume",
+    ]:
+
+        monthly[column] = pd.to_numeric(
+            monthly[column],
+            errors="coerce",
+        )
+
+    # --------------------------------------------------------
+    # Valid price rows
+    # --------------------------------------------------------
+
+    monthly = monthly[
+        monthly["Close"] > 0
+    ].copy()
 
     monthly = monthly.sort_values(
         [
             "Symbol",
-            "Month",
+            "Date",
         ]
-    )
-
-    monthly = monthly.reset_index(
+    ).reset_index(
         drop=True
     )
+
+    unique_symbols = (
+        monthly["Symbol"]
+        .nunique()
+    )
+
+    unique_months = (
+        monthly["Date"]
+        .nunique()
+    )
+
+    print(
+        f"Monthly conversion completed in "
+        f"{timer.elapsed():.2f}s"
+    )
+
+    print(
+        f"Symbols : {unique_symbols:,}"
+    )
+
+    print(
+        f"Months  : {unique_months:,}"
+    )
+
+    if not monthly.empty:
+
+        print(
+            f"Range   : "
+            f"{monthly['Date'].min().date()} -> "
+            f"{monthly['Date'].max().date()}"
+        )
 
     return monthly
 
 
 # ============================================================
-# MONTHLY DATA CACHE
+# SAVE MONTHLY CACHE
 # ============================================================
 
 def save_monthly_cache(
@@ -1396,100 +1152,135 @@ def save_monthly_cache(
             MONTHLY_CACHE_FILE
         )
 
+        print()
+
+        print(
+            "Monthly market cache saved:"
+        )
+
+        print(
+            MONTHLY_CACHE_FILE
+        )
+
     except Exception as exc:
 
+        print()
+
         print(
-            "WARNING: Could not save monthly cache."
+            "WARNING: Could not save monthly cache:"
         )
 
         print(
-            f"Reason: {exc}"
+            exc
         )
 
+
+# ============================================================
+# LOAD MONTHLY CACHE
+# ============================================================
 
 def load_monthly_cache() -> Optional[pd.DataFrame]:
 
     if not MONTHLY_CACHE_FILE.exists():
+
         return None
 
     try:
 
-        monthly = pd.read_pickle(
+        data = pd.read_pickle(
             MONTHLY_CACHE_FILE
         )
 
-        if not isinstance(
-            monthly,
-            pd.DataFrame,
+        if (
+            isinstance(data, pd.DataFrame)
+            and not data.empty
         ):
-            return None
 
-        if monthly.empty:
-            return None
-
-        return monthly
+            return data
 
     except Exception:
 
         return None
 
+    return None
+
 
 # ============================================================
-# MONTHLY FEATURE ENGINE
+# FEATURE ENGINE
 # ============================================================
 
 def calculate_monthly_features(
     monthly: pd.DataFrame,
 ) -> pd.DataFrame:
 
-    """
-    Calculate the locked production features.
+    timer = Timer()
 
-    Momentum:
-        9-month price momentum
+    print()
 
-    Breakout:
-        Current month close relative to the highest
-        high of the previous 6 completed months.
-
-    Volume:
-        Current month volume relative to the average
-        of the previous 3 completed months.
-
-    The current month is therefore evaluated only after
-    completion.
-    """
+    print_subheader(
+        "FEATURE ENGINE"
+    )
 
     data = monthly.copy()
 
     data = data.sort_values(
         [
             "Symbol",
-            "Month",
+            "Date",
         ]
+    ).reset_index(
+        drop=True
     )
 
-    # --------------------------------------------------------
-    # Momentum
-    # --------------------------------------------------------
+    grouped_close = (
+        data
+        .groupby(
+            "Symbol"
+        )["Close"]
+    )
+
+    grouped_high = (
+        data
+        .groupby(
+            "Symbol"
+        )["High"]
+    )
+
+    grouped_volume = (
+        data
+        .groupby(
+            "Symbol"
+        )["Volume"]
+    )
+
+    # ========================================================
+    # 9-MONTH MOMENTUM
+    # ========================================================
 
     data["Momentum_9M"] = (
-        data
-        .groupby("Symbol")["Close"]
+        grouped_close
         .transform(
-            lambda x: (
-                x / x.shift(MOMENTUM_MONTHS) - 1.0
+            lambda x:
+            x
+            / x.shift(
+                MOMENTUM_MONTHS
             )
+            - 1.0
         )
     )
 
-    # --------------------------------------------------------
-    # Breakout
-    # --------------------------------------------------------
+    # ========================================================
+    # 6-MONTH BREAKOUT
+    # ========================================================
+    #
+    # Current close versus highest high of the previous
+    # six completed monthly bars.
+    #
+    # shift(1) prevents current-month leakage.
+    # ========================================================
 
     prior_high = (
-        data
-        .groupby("Symbol")["High"]
+        grouped_high
         .transform(
             lambda x:
             x.shift(1)
@@ -1502,175 +1293,409 @@ def calculate_monthly_features(
     )
 
     data["Breakout_6M"] = (
-        data["Close"] / prior_high - 1.0
+        data["Close"]
+        / prior_high
+        - 1.0
     )
 
-    # --------------------------------------------------------
-    # Volume confirmation
-    # --------------------------------------------------------
+    # ========================================================
+    # PRIOR 3-MONTH AVERAGE VOLUME
+    # ========================================================
 
     prior_volume_average = (
-        data
-        .groupby("Symbol")["Volume"]
+        grouped_volume
         .transform(
             lambda x:
             x.shift(1)
             .rolling(
-                3,
-                min_periods=3,
+                VOLUME_AVERAGE_MONTHS,
+                min_periods=VOLUME_AVERAGE_MONTHS,
             )
             .mean()
         )
     )
 
-    data["Volume_Ratio"] = (
+    # ========================================================
+    # VOLUME RATIO
+    # ========================================================
+
+    data["Volume_Ratio"] = np.where(
+        prior_volume_average > 0,
         data["Volume"]
-        / prior_volume_average
+        / prior_volume_average,
+        np.nan,
     )
+
+    # ========================================================
+    # VOLUME PASS
+    # ========================================================
 
     data["Volume_Pass"] = (
         data["Volume_Ratio"]
         >= VOLUME_MULTIPLIER
     )
 
-    # --------------------------------------------------------
-    # Combined score
-    # --------------------------------------------------------
+    # ========================================================
+    # COMBINED SCORE
+    # ========================================================
 
     data["Combined_Score"] = (
-        data["Momentum_9M"].fillna(0.0)
-        + data["Breakout_6M"].fillna(0.0)
+        data["Momentum_9M"]
+        + data["Breakout_6M"]
+    )
+
+    print(
+        f"Features built in "
+        f"{timer.elapsed():.2f}s"
     )
 
     return data
 
 
 # ============================================================
-# SIGNAL GENERATION
+# CURRENT SIGNAL
 # ============================================================
 
 def generate_current_signal(
     features: pd.DataFrame,
-) -> Tuple[
+) -> tuple[
+    pd.DataFrame,
     pd.DataFrame,
     pd.DataFrame,
     pd.Timestamp,
 ]:
 
+    timer = Timer()
+
+    print()
+
+    print_subheader(
+        "CURRENT SIGNAL GENERATION"
+    )
+
     if features.empty:
 
-        raise RuntimeError(
-            "Feature DataFrame is empty."
+        raise ValueError(
+            "Feature dataframe is empty."
         )
 
-    latest_month = (
-        features["Month"]
+    latest_date = (
+        features["Date"]
         .max()
     )
 
-    current = features.loc[
-        features["Month"] == latest_month
+    latest = features[
+        features["Date"]
+        == latest_date
     ].copy()
 
-    if current.empty:
+    if latest.empty:
 
-        raise RuntimeError(
-            "No stocks found for latest completed month."
+        raise ValueError(
+            "No rows found for latest completed month."
         )
 
     # --------------------------------------------------------
-    # Basic eligibility
+    # Convert numeric columns
     # --------------------------------------------------------
 
-    current = current[
-        current["Close"].notna()
+    required_columns = [
+        "Close",
+        "Momentum_9M",
+        "Breakout_6M",
+        "Volume_Ratio",
+    ]
+
+    for column in required_columns:
+
+        latest[column] = pd.to_numeric(
+            latest[column],
+            errors="coerce",
+        )
+
+    # --------------------------------------------------------
+    # Base validity
+    # --------------------------------------------------------
+
+    eligible = latest[
+        latest["Close"].notna()
+        &
+        latest["Momentum_9M"].notna()
+        &
+        latest["Breakout_6M"].notna()
+        &
+        latest["Volume_Ratio"].notna()
     ].copy()
 
-    current = current[
-        current["Momentum_9M"].notna()
-        & current["Breakout_6M"].notna()
-        & current["Volume_Ratio"].notna()
-    ].copy()
-
-    # --------------------------------------------------------
-    # Volume filter
-    # --------------------------------------------------------
-
-    current = current[
-        current["Volume_Ratio"]
-        >= VOLUME_MULTIPLIER
-    ].copy()
-
-    # --------------------------------------------------------
-    # Ranking
-    # --------------------------------------------------------
-
-    current = current.sort_values(
-        [
-            "Combined_Score",
-            "Momentum_9M",
-            "Breakout_6M",
-            "Volume_Ratio",
-        ],
-        ascending=[
-            False,
-            False,
-            False,
-            False,
-        ],
+    initial_count = len(
+        eligible
     )
 
-    current = current.reset_index(
-        drop=True
+    # ========================================================
+    # FILTER 1
+    #
+    # Momentum_9M >= 0
+    # ========================================================
+
+    if REQUIRE_NON_NEGATIVE_MOMENTUM:
+
+        eligible = eligible[
+            eligible["Momentum_9M"]
+            >= 0.0
+        ].copy()
+
+    momentum_filter_count = len(
+        eligible
     )
 
-    current["Research_Rank"] = (
-        np.arange(
-            1,
-            len(current) + 1,
-        )
+    # ========================================================
+    # FILTER 2
+    #
+    # Breakout_6M >= 0
+    # ========================================================
+
+    if REQUIRE_NON_NEGATIVE_BREAKOUT:
+
+        eligible = eligible[
+            eligible["Breakout_6M"]
+            >= 0.0
+        ].copy()
+
+    breakout_filter_count = len(
+        eligible
     )
 
-    top30 = current.head(
-        TOP_RESEARCH_STOCKS
-    ).copy()
+    # ========================================================
+    # FILTER 3
+    #
+    # Volume_Ratio >= 1.50
+    # ========================================================
 
-    top10 = current.head(
-        TOP_PORTFOLIO_STOCKS
-    ).copy()
+    if REQUIRE_VOLUME_CONFIRMATION:
 
-    # --------------------------------------------------------
-    # Portfolio allocation
-    # --------------------------------------------------------
+        eligible = eligible[
+            eligible["Volume_Ratio"]
+            >= VOLUME_MULTIPLIER
+        ].copy()
 
-    if not top10.empty:
+    final_eligible_count = len(
+        eligible
+    )
 
-        position_weight = (
-            1.0 / len(top10)
+    # ========================================================
+    # RANKING
+    # ========================================================
+
+    if not eligible.empty:
+
+        eligible = eligible.sort_values(
+            by=[
+                "Combined_Score",
+                "Momentum_9M",
+                "Breakout_6M",
+                "Volume_Ratio",
+            ],
+            ascending=[
+                False,
+                False,
+                False,
+                False,
+            ],
+        ).reset_index(
+            drop=True
         )
 
-        position_capital = (
-            TOTAL_CAPITAL
-            / len(top10)
-        )
-
-        top10["Target_Weight"] = (
-            position_weight
-        )
-
-        top10["Target_Capital"] = (
-            position_capital
+        eligible.insert(
+            0,
+            "Research_Rank",
+            np.arange(
+                1,
+                len(eligible) + 1,
+            ),
         )
 
     else:
 
-        top10["Target_Weight"] = []
-        top10["Target_Capital"] = []
+        eligible["Research_Rank"] = (
+            pd.Series(
+                dtype="int64"
+            )
+        )
+
+    # ========================================================
+    # TOP 30
+    # ========================================================
+
+    top30 = eligible.head(
+        TOP_RESEARCH_STOCKS
+    ).copy()
+
+    # ========================================================
+    # TOP 10
+    # ========================================================
+
+    top10 = eligible.head(
+        TOP_PORTFOLIO_STOCKS
+    ).copy()
+
+    # ========================================================
+    # CAPITAL ALLOCATION
+    # ========================================================
+    #
+    # N10 means each position gets 10% of capital.
+    #
+    # ₹100,000 / 10 = ₹10,000.
+    #
+    # If fewer than 10 stocks qualify, the unused capital
+    # remains CASH.
+    # ========================================================
+
+    if not top10.empty:
+
+        top10["Target_Weight"] = (
+            1.0
+            / TOP_PORTFOLIO_STOCKS
+        )
+
+        top10["Target_Capital"] = (
+            TOTAL_CAPITAL
+            / TOP_PORTFOLIO_STOCKS
+        )
+
+    else:
+
+        top10["Target_Weight"] = (
+            pd.Series(
+                dtype="float64"
+            )
+        )
+
+        top10["Target_Capital"] = (
+            pd.Series(
+                dtype="float64"
+            )
+        )
+
+    # --------------------------------------------------------
+    # Signal
+    # --------------------------------------------------------
+
+    top10["Signal"] = "BUY"
+
+    # --------------------------------------------------------
+    # Status columns
+    # --------------------------------------------------------
+
+    top30["Eligibility_Status"] = (
+        "QUALIFIED"
+    )
+
+    top10["Portfolio_Status"] = (
+        "PORTFOLIO"
+    )
+
+    # ========================================================
+    # SAFETY CHECK
+    # ========================================================
+    #
+    # Nothing with negative Momentum_9M or Breakout_6M can
+    # appear in Top 30 or Top 10.
+    # ========================================================
+
+    if not top30.empty:
+
+        if (
+            top30["Momentum_9M"]
+            < 0
+        ).any():
+
+            raise RuntimeError(
+                "SAFETY CHECK FAILED: "
+                "Negative Momentum_9M found in Top 30."
+            )
+
+        if (
+            top30["Breakout_6M"]
+            < 0
+        ).any():
+
+            raise RuntimeError(
+                "SAFETY CHECK FAILED: "
+                "Negative Breakout_6M found in Top 30."
+            )
+
+    if not top10.empty:
+
+        if (
+            top10["Momentum_9M"]
+            < 0
+        ).any():
+
+            raise RuntimeError(
+                "SAFETY CHECK FAILED: "
+                "Negative Momentum_9M found in Top 10."
+            )
+
+        if (
+            top10["Breakout_6M"]
+            < 0
+        ).any():
+
+            raise RuntimeError(
+                "SAFETY CHECK FAILED: "
+                "Negative Breakout_6M found in Top 10."
+            )
+
+    # ========================================================
+    # DISPLAY FILTER COUNTS
+    # ========================================================
+
+    print(
+        f"Latest completed month : "
+        f"{latest_date.date()}"
+    )
+
+    print(
+        f"Initial valid candidates : "
+        f"{initial_count:,}"
+    )
+
+    print(
+        f"After Momentum >= 0       : "
+        f"{momentum_filter_count:,}"
+    )
+
+    print(
+        f"After Breakout >= 0       : "
+        f"{breakout_filter_count:,}"
+    )
+
+    print(
+        f"After Volume >= "
+        f"{VOLUME_MULTIPLIER:.2f}x : "
+        f"{final_eligible_count:,}"
+    )
+
+    print(
+        f"Top 30 research stocks    : "
+        f"{len(top30):,}"
+    )
+
+    print(
+        f"Top 10 portfolio stocks   : "
+        f"{len(top10):,}"
+    )
+
+    print(
+        f"Signal generation completed in "
+        f"{timer.elapsed():.2f}s"
+    )
 
     return (
-        current,
+        eligible,
+        top30,
         top10,
-        latest_month,
+        latest_date,
     )
 
 
@@ -1680,49 +1705,47 @@ def generate_current_signal(
 
 def calculate_regime_monitor(
     monthly: pd.DataFrame,
-) -> Dict[str, Any]:
+) -> dict:
 
-    """
-    Optional market regime monitor.
+    if monthly.empty:
 
-    IMPORTANT:
-
-    This is NOT part of the locked R0 strategy.
-
-    It exists only as a diagnostic monitor.
-
-    Because the existing project data is primarily stock-level,
-    this function uses the cross-sectional median stock close
-    as a broad market proxy.
-
-    Do not use it as an active portfolio filter unless
-    independently backtested.
-    """
+        return {
+            "Regime": "UNKNOWN",
+            "Market_Proxy": np.nan,
+            "Market_10M_MA": np.nan,
+            "Previous_10M_MA": np.nan,
+        }
 
     pivot = monthly.pivot_table(
-        index="Month",
+        index="Date",
         columns="Symbol",
         values="Close",
         aggfunc="last",
     )
 
-    if pivot.empty:
-
-        return {
-            "regime": "UNKNOWN",
-            "market_proxy": np.nan,
-            "ma_10m": np.nan,
-            "ma_10m_previous": np.nan,
-        }
-
     market_proxy = (
-        pivot.median(
+        pivot
+        .median(
             axis=1,
             skipna=True,
         )
+        .dropna()
     )
 
-    ma_10m = (
+    if len(market_proxy) < 11:
+
+        return {
+            "Regime": "UNKNOWN",
+            "Market_Proxy": (
+                market_proxy.iloc[-1]
+                if len(market_proxy)
+                else np.nan
+            ),
+            "Market_10M_MA": np.nan,
+            "Previous_10M_MA": np.nan,
+        }
+
+    ma10 = (
         market_proxy
         .rolling(
             10,
@@ -1731,34 +1754,19 @@ def calculate_regime_monitor(
         .mean()
     )
 
-    if len(ma_10m.dropna()) < 2:
-
-        return {
-            "regime": "UNKNOWN",
-            "market_proxy": safe_float(
-                market_proxy.iloc[-1]
-            ),
-            "ma_10m": np.nan,
-            "ma_10m_previous": np.nan,
-        }
-
     current_proxy = (
         market_proxy.iloc[-1]
     )
 
     current_ma = (
-        ma_10m.iloc[-1]
+        ma10.iloc[-1]
     )
 
     previous_ma = (
-        ma_10m.iloc[-2]
+        ma10.iloc[-2]
     )
 
-    if (
-        pd.isna(current_proxy)
-        or pd.isna(current_ma)
-        or pd.isna(previous_ma)
-    ):
+    if pd.isna(current_ma):
 
         regime = "UNKNOWN"
 
@@ -1781,16 +1789,10 @@ def calculate_regime_monitor(
         regime = "YELLOW"
 
     return {
-        "regime": regime,
-        "market_proxy": safe_float(
-            current_proxy
-        ),
-        "ma_10m": safe_float(
-            current_ma
-        ),
-        "ma_10m_previous": safe_float(
-            previous_ma
-        ),
+        "Regime": regime,
+        "Market_Proxy": current_proxy,
+        "Market_10M_MA": current_ma,
+        "Previous_10M_MA": previous_ma,
     }
 
 
@@ -1798,24 +1800,17 @@ def calculate_regime_monitor(
 # CURRENT HOLDINGS
 # ============================================================
 
-def load_current_holdings() -> List[str]:
-
-    """
-    Read current holdings from:
-
-        results/current_holdings.csv
-
-    Expected column:
-
-        Symbol
-
-    If the file does not exist, the portfolio is assumed to
-    have no existing positions.
-    """
+def load_current_holdings() -> set[str]:
 
     if not HOLDINGS_FILE.exists():
 
-        return []
+        print()
+
+        print(
+            "No current holdings file found."
+        )
+
+        return set()
 
     try:
 
@@ -1825,57 +1820,53 @@ def load_current_holdings() -> List[str]:
 
     except Exception as exc:
 
+        print()
+
         print(
-            "WARNING: Could not read current holdings."
+            "WARNING: Could not read current holdings:"
         )
 
         print(
-            f"Reason: {exc}"
+            exc
         )
 
-        return []
-
-    if holdings.empty:
-
-        return []
+        return set()
 
     symbol_column = None
 
-    for candidate in [
+    for column in [
         "Symbol",
         "symbol",
         "Ticker",
         "ticker",
     ]:
 
-        if candidate in holdings.columns:
+        if column in holdings.columns:
 
-            symbol_column = candidate
+            symbol_column = column
+
             break
 
     if symbol_column is None:
 
         print(
-            "WARNING: current_holdings.csv has no "
-            "Symbol column."
+            "WARNING: Holdings file does not contain "
+            "Symbol/Ticker column."
         )
 
-        return []
+        return set()
 
-    symbols = []
+    symbols = set()
 
     for symbol in holdings[
         symbol_column
-    ].tolist():
+    ].dropna():
 
-        cleaned = clean_symbol(symbol)
+        symbols.add(
+            clean_symbol(symbol)
+        )
 
-        if cleaned:
-            symbols.append(cleaned)
-
-    return sorted(
-        set(symbols)
-    )
+    return symbols
 
 
 # ============================================================
@@ -1884,62 +1875,50 @@ def load_current_holdings() -> List[str]:
 
 def generate_orders(
     top10: pd.DataFrame,
-    current_holdings: Sequence[str],
+    current_holdings: set[str],
 ) -> pd.DataFrame:
 
-    """
-    Generate monthly rebalance instructions.
+    if top10.empty:
 
-    Rules:
+        target_symbols = set()
 
-        Current holding still in Top 10
-            -> HOLD
+    else:
 
-        Current holding no longer in Top 10
-            -> SELL
+        target_symbols = set(
+            top10["Symbol"]
+            .map(clean_symbol)
+        )
 
-        New Top 10 stock
-            -> BUY
+    orders = []
 
-    Equal weight portfolio.
-    """
-
-    target_symbols = [
-        clean_symbol(x)
-        for x in top10["Symbol"].tolist()
-    ]
-
-    current_symbols = [
-        clean_symbol(x)
-        for x in current_holdings
-    ]
-
-    target_set = set(target_symbols)
-    current_set = set(current_symbols)
-
-    rows = []
-
-    # --------------------------------------------------------
-    # SELL
-    # --------------------------------------------------------
+    # ========================================================
+    # SELL ORDERS
+    # ========================================================
 
     for symbol in sorted(
-        current_set - target_set
+        current_holdings
+        - target_symbols
     ):
 
-        rows.append(
+        orders.append(
             {
                 "Symbol": symbol,
                 "Action": "SELL",
+                "Reason": (
+                    "No longer in current Top 10"
+                ),
                 "Target_Weight": 0.0,
                 "Target_Capital": 0.0,
-                "Reason": "Dropped from Top 10",
+                "Momentum_9M": np.nan,
+                "Breakout_6M": np.nan,
+                "Volume_Ratio": np.nan,
+                "Combined_Score": np.nan,
             }
         )
 
-    # --------------------------------------------------------
-    # HOLD / BUY
-    # --------------------------------------------------------
+    # ========================================================
+    # BUY / HOLD ORDERS
+    # ========================================================
 
     for _, row in top10.iterrows():
 
@@ -1947,49 +1926,75 @@ def generate_orders(
             row["Symbol"]
         )
 
-        if symbol in current_set:
+        if symbol in current_holdings:
 
             action = "HOLD"
-            reason = "Remains in Top 10"
+
+            reason = (
+                "Still in current Top 10"
+            )
 
         else:
 
             action = "BUY"
-            reason = "New Top 10 entrant"
 
-        rows.append(
+            reason = (
+                "New Top 10 entrant"
+            )
+
+        orders.append(
             {
                 "Symbol": symbol,
                 "Action": action,
+                "Reason": reason,
                 "Target_Weight": safe_float(
-                    row.get(
-                        "Target_Weight",
-                        np.nan,
-                    )
+                    row["Target_Weight"]
                 ),
                 "Target_Capital": safe_float(
-                    row.get(
-                        "Target_Capital",
-                        np.nan,
-                    )
+                    row["Target_Capital"]
                 ),
-                "Reason": reason,
+                "Momentum_9M": safe_float(
+                    row["Momentum_9M"]
+                ),
+                "Breakout_6M": safe_float(
+                    row["Breakout_6M"]
+                ),
+                "Volume_Ratio": safe_float(
+                    row["Volume_Ratio"]
+                ),
+                "Combined_Score": safe_float(
+                    row["Combined_Score"]
+                ),
             }
         )
 
-    if not rows:
+    # ========================================================
+    # EMPTY ORDERS
+    # ========================================================
+
+    if not orders:
 
         return pd.DataFrame(
             columns=[
                 "Symbol",
                 "Action",
+                "Reason",
                 "Target_Weight",
                 "Target_Capital",
-                "Reason",
+                "Momentum_9M",
+                "Breakout_6M",
+                "Volume_Ratio",
+                "Combined_Score",
             ]
         )
 
-    orders = pd.DataFrame(rows)
+    result = pd.DataFrame(
+        orders
+    )
+
+    # ========================================================
+    # ORDER SORTING
+    # ========================================================
 
     action_order = {
         "SELL": 1,
@@ -1997,66 +2002,59 @@ def generate_orders(
         "HOLD": 3,
     }
 
-    orders["_order"] = (
-        orders["Action"]
+    result["_ActionOrder"] = (
+        result["Action"]
         .map(action_order)
         .fillna(99)
     )
 
-    orders = orders.sort_values(
+    result = result.sort_values(
         [
-            "_order",
-            "Symbol",
+            "_ActionOrder",
+            "Combined_Score",
+        ],
+        ascending=[
+            True,
+            False,
+        ],
+    )
+
+    result = result.drop(
+        columns=[
+            "_ActionOrder",
         ]
     )
 
-    orders = orders.drop(
-        columns="_order"
-    )
-
-    orders = orders.reset_index(
+    result = result.reset_index(
         drop=True
     )
 
-    return orders
+    return result
 
 
 # ============================================================
-# SAVE REPORTS
+# SAVE CSV REPORTS
 # ============================================================
 
 def save_csv_reports(
     ranked: pd.DataFrame,
+    top30: pd.DataFrame,
     top10: pd.DataFrame,
     orders: pd.DataFrame,
-    signal_month: pd.Timestamp,
-    regime: Dict[str, Any],
+    universe_count: int,
+    valid_daily_symbols: int,
+    usable_monthly_symbols: int,
+    completed_months: int,
+    latest_date: pd.Timestamp,
+    regime_info: dict,
     runtime_seconds: float,
 ) -> None:
 
     # --------------------------------------------------------
-    # Current signal
+    # Full qualified signal
     # --------------------------------------------------------
 
-    signal = top10.copy()
-
-    signal["Signal_Month"] = signal_month
-
-    signal["Strategy"] = STRATEGY_NAME
-
-    signal["Execution"] = (
-        "Next trading session"
-    )
-
-    signal["Regime_Monitor"] = (
-        regime.get("regime")
-    )
-
-    signal["Bear_Overlay_Enabled"] = (
-        ENABLE_BEAR_OVERLAY
-    )
-
-    signal.to_csv(
+    ranked.to_csv(
         CURRENT_SIGNAL_FILE,
         index=False,
     )
@@ -2064,14 +2062,6 @@ def save_csv_reports(
     # --------------------------------------------------------
     # Top 30
     # --------------------------------------------------------
-
-    top30 = ranked.head(
-        TOP_RESEARCH_STOCKS
-    ).copy()
-
-    top30["Signal_Month"] = signal_month
-
-    top30["Strategy"] = STRATEGY_NAME
 
     top30.to_csv(
         TOP30_FILE,
@@ -2088,38 +2078,71 @@ def save_csv_reports(
     )
 
     # --------------------------------------------------------
-    # Run summary
+    # Summary
     # --------------------------------------------------------
+
+    eligible_count = len(
+        ranked
+    )
+
+    portfolio_count = len(
+        top10
+    )
+
+    capital_allocated = (
+        portfolio_count
+        * (
+            TOTAL_CAPITAL
+            / TOP_PORTFOLIO_STOCKS
+        )
+    )
+
+    cash_remaining = (
+        TOTAL_CAPITAL
+        - capital_allocated
+    )
 
     summary = pd.DataFrame(
         [
             {
-                "Run_Timestamp": datetime.now().isoformat(
-                    timespec="seconds"
-                ),
+                "Run_Timestamp": pd.Timestamp.now(),
+                "Signal_Month": latest_date,
                 "Strategy": STRATEGY_NAME,
-                "Signal_Month": signal_month,
-                "Requested_Universe": len(
-                    ranked["Symbol"].unique()
+                "Universe": universe_count,
+                "Valid_Daily_Symbols": valid_daily_symbols,
+                "Usable_Monthly_Symbols": usable_monthly_symbols,
+                "Completed_Months": completed_months,
+                "Eligible_Stocks": eligible_count,
+                "Top30_Stocks": min(
+                    eligible_count,
+                    TOP_RESEARCH_STOCKS,
                 ),
-                "Eligible_Stocks": len(ranked),
-                "Portfolio_Size": len(top10),
-                "Total_Capital": TOTAL_CAPITAL,
-                "Capital_Per_Position": (
-                    TOTAL_CAPITAL / len(top10)
-                    if len(top10) > 0
-                    else 0.0
+                "Portfolio_Stocks": portfolio_count,
+                "Capital_Allocated": capital_allocated,
+                "Cash_Remaining": cash_remaining,
+                "Momentum_Filter": (
+                    "Momentum_9M >= 0"
+                    if REQUIRE_NON_NEGATIVE_MOMENTUM
+                    else "OFF"
                 ),
-                "Regime_Monitor": regime.get(
-                    "regime"
+                "Breakout_Filter": (
+                    "Breakout_6M >= 0"
+                    if REQUIRE_NON_NEGATIVE_BREAKOUT
+                    else "OFF"
                 ),
+                "Volume_Filter": (
+                    f"Volume_Ratio >= "
+                    f"{VOLUME_MULTIPLIER:.2f}"
+                    if REQUIRE_VOLUME_CONFIRMATION
+                    else "OFF"
+                ),
+                "Regime": regime_info[
+                    "Regime"
+                ],
                 "Bear_Overlay_Enabled": (
                     ENABLE_BEAR_OVERLAY
                 ),
                 "Runtime_Seconds": runtime_seconds,
-                "Runtime": format_seconds(
-                    runtime_seconds
-                ),
             }
         ]
     )
@@ -2130,26 +2153,23 @@ def save_csv_reports(
     )
 
 
+# ============================================================
+# EXCEL REPORT
+# ============================================================
+
 def save_excel_report(
     ranked: pd.DataFrame,
+    top30: pd.DataFrame,
     top10: pd.DataFrame,
     orders: pd.DataFrame,
-    signal_month: pd.Timestamp,
-    regime: Dict[str, Any],
+    universe_count: int,
+    valid_daily_symbols: int,
+    usable_monthly_symbols: int,
+    completed_months: int,
+    latest_date: pd.Timestamp,
+    regime_info: dict,
     runtime_seconds: float,
 ) -> None:
-
-    if not OPENPYXL_AVAILABLE:
-
-        print(
-            "WARNING: openpyxl not installed."
-        )
-
-        print(
-            "Excel report skipped."
-        )
-
-        return
 
     try:
 
@@ -2159,44 +2179,22 @@ def save_excel_report(
         ) as writer:
 
             # ------------------------------------------------
-            # Signal
+            # Top 30
             # ------------------------------------------------
 
-            signal = top10.copy()
-
-            signal["Signal_Month"] = signal_month
-
-            signal["Strategy"] = STRATEGY_NAME
-
-            signal["Execution"] = (
-                "Next trading session"
-            )
-
-            signal["Regime_Monitor"] = (
-                regime.get("regime")
-            )
-
-            signal["Bear_Overlay_Enabled"] = (
-                ENABLE_BEAR_OVERLAY
-            )
-
-            signal.to_excel(
+            top30.to_excel(
                 writer,
-                sheet_name="LIVE_SIGNAL",
+                sheet_name="Top 30",
                 index=False,
             )
 
             # ------------------------------------------------
-            # Top 30
+            # Top 10
             # ------------------------------------------------
 
-            top30 = ranked.head(
-                TOP_RESEARCH_STOCKS
-            ).copy()
-
-            top30.to_excel(
+            top10.to_excel(
                 writer,
-                sheet_name="TOP_30",
+                sheet_name="Top 10",
                 index=False,
             )
 
@@ -2206,106 +2204,176 @@ def save_excel_report(
 
             orders.to_excel(
                 writer,
-                sheet_name="ORDERS",
+                sheet_name="Orders",
                 index=False,
             )
 
             # ------------------------------------------------
-            # Summary
+            # Full eligible universe
             # ------------------------------------------------
+
+            ranked.to_excel(
+                writer,
+                sheet_name="Eligible Universe",
+                index=False,
+            )
+
+            # ------------------------------------------------
+            # Run Summary
+            # ------------------------------------------------
+
+            capital_allocated = (
+                len(top10)
+                * (
+                    TOTAL_CAPITAL
+                    / TOP_PORTFOLIO_STOCKS
+                )
+            )
+
+            cash_remaining = (
+                TOTAL_CAPITAL
+                - capital_allocated
+            )
 
             summary = pd.DataFrame(
                 [
                     {
-                        "Run Timestamp": datetime.now().strftime(
-                            "%Y-%m-%d %H:%M:%S"
+                        "Metric": "Strategy",
+                        "Value": STRATEGY_NAME,
+                    },
+                    {
+                        "Metric": "Signal Month",
+                        "Value": latest_date,
+                    },
+                    {
+                        "Metric": "Universe",
+                        "Value": universe_count,
+                    },
+                    {
+                        "Metric": "Valid Daily Symbols",
+                        "Value": valid_daily_symbols,
+                    },
+                    {
+                        "Metric": "Usable Monthly Symbols",
+                        "Value": usable_monthly_symbols,
+                    },
+                    {
+                        "Metric": "Completed Months",
+                        "Value": completed_months,
+                    },
+                    {
+                        "Metric": "Eligible Stocks",
+                        "Value": len(ranked),
+                    },
+                    {
+                        "Metric": "Top 30",
+                        "Value": len(top30),
+                    },
+                    {
+                        "Metric": "Top 10",
+                        "Value": len(top10),
+                    },
+                    {
+                        "Metric": "Capital Allocated",
+                        "Value": capital_allocated,
+                    },
+                    {
+                        "Metric": "Cash Remaining",
+                        "Value": cash_remaining,
+                    },
+                    {
+                        "Metric": "Momentum Rule",
+                        "Value": (
+                            "Momentum_9M >= 0"
+                            if REQUIRE_NON_NEGATIVE_MOMENTUM
+                            else "OFF"
                         ),
-                        "Strategy": STRATEGY_NAME,
-                        "Signal Month": signal_month,
-                        "Universe": len(
-                            ranked["Symbol"].unique()
+                    },
+                    {
+                        "Metric": "Breakout Rule",
+                        "Value": (
+                            "Breakout_6M >= 0"
+                            if REQUIRE_NON_NEGATIVE_BREAKOUT
+                            else "OFF"
                         ),
-                        "Eligible Stocks": len(
-                            ranked
+                    },
+                    {
+                        "Metric": "Volume Rule",
+                        "Value": (
+                            f"Volume_Ratio >= "
+                            f"{VOLUME_MULTIPLIER:.2f}x"
+                            if REQUIRE_VOLUME_CONFIRMATION
+                            else "OFF"
                         ),
-                        "Portfolio Size": len(
-                            top10
+                    },
+                    {
+                        "Metric": "Regime",
+                        "Value": regime_info[
+                            "Regime"
+                        ],
+                    },
+                    {
+                        "Metric": "Bear Overlay",
+                        "Value": (
+                            "ENABLED"
+                            if ENABLE_BEAR_OVERLAY
+                            else "DISABLED"
                         ),
-                        "Capital": TOTAL_CAPITAL,
-                        "Capital / Position": (
-                            TOTAL_CAPITAL
-                            / len(top10)
-                            if len(top10) > 0
-                            else 0.0
-                        ),
-                        "Regime Monitor": (
-                            regime.get("regime")
-                        ),
-                        "Bear Overlay Enabled": (
-                            ENABLE_BEAR_OVERLAY
-                        ),
-                        "Runtime": format_seconds(
-                            runtime_seconds
-                        ),
-                    }
+                    },
+                    {
+                        "Metric": "Runtime Seconds",
+                        "Value": runtime_seconds,
+                    },
                 ]
             )
 
             summary.to_excel(
                 writer,
-                sheet_name="RUN_SUMMARY",
+                sheet_name="Run Summary",
                 index=False,
             )
 
             # ------------------------------------------------
-            # Strategy rules
+            # Regime
             # ------------------------------------------------
 
-            rules = pd.DataFrame(
-                {
-                    "Parameter": [
-                        "Strategy",
-                        "Momentum",
-                        "Skip Month",
-                        "Breakout",
-                        "Volume",
-                        "Trend Filter",
-                        "Regime Filter",
-                        "Portfolio Size",
-                        "Rebalance",
-                        "Capital",
-                        "Execution",
-                    ],
-                    "Value": [
-                        STRATEGY_NAME,
-                        "9 months",
-                        "0 months",
-                        "6 months",
-                        ">= 1.50x reference",
-                        "None",
-                        "None (R0)",
-                        "Top 10",
-                        "Monthly",
-                        "Rs. 100,000",
-                        "Next trading session",
-                    ],
-                }
+            regime_df = pd.DataFrame(
+                [
+                    {
+                        "Metric": key,
+                        "Value": value,
+                    }
+                    for key, value
+                    in regime_info.items()
+                ]
             )
 
-            rules.to_excel(
+            regime_df.to_excel(
                 writer,
-                sheet_name="STRATEGY_RULES",
+                sheet_name="Regime Monitor",
                 index=False,
             )
 
-    except Exception as exc:
+        print()
 
         print(
-            "WARNING: Excel report could not be created."
+            "Excel report saved:"
         )
 
         print(
-            f"Reason: {exc}"
+            EXCEL_FILE
+        )
+
+    except Exception as exc:
+
+        print()
+
+        print(
+            "WARNING: Excel report could not be created:"
+        )
+
+        print(
+            exc
         )
 
 
@@ -2315,147 +2383,209 @@ def save_excel_report(
 
 def display_signal(
     ranked: pd.DataFrame,
+    top30: pd.DataFrame,
     top10: pd.DataFrame,
     orders: pd.DataFrame,
-    signal_month: pd.Timestamp,
-    regime: Dict[str, Any],
+    universe_count: int,
+    valid_daily_symbols: int,
+    usable_monthly_symbols: int,
+    completed_months: int,
+    latest_date: pd.Timestamp,
+    regime_info: dict,
 ) -> None:
 
     print()
-    print(LINE)
-    print("CURRENT MONTHLY SIGNAL")
-    print(LINE)
 
     print(
-        f"Signal month               : "
-        f"{signal_month.strftime('%Y-%m-%d')}"
+        "=" * 100
     )
 
     print(
-        f"Execution                  : "
-        f"Next trading session"
+        "CURRENT MONTHLY SIGNAL"
     )
 
     print(
-        f"Strategy                   : "
-        f"{STRATEGY_NAME}"
+        "=" * 100
     )
 
     print(
-        f"Universe                   : "
-        f"{ranked['Symbol'].nunique()}"
+        f"Signal month        : "
+        f"{latest_date.date()}"
     )
 
     print(
-        f"Eligible stocks            : "
-        f"{len(ranked)}"
+        f"Universe            : "
+        f"{universe_count:,}"
     )
 
     print(
-        f"Regime monitor             : "
-        f"{regime.get('regime')}"
+        f"Valid daily symbols : "
+        f"{valid_daily_symbols:,}"
     )
 
     print(
-        f"Bear overlay enabled       : "
-        f"{ENABLE_BEAR_OVERLAY}"
+        f"Usable monthly      : "
+        f"{usable_monthly_symbols:,}"
     )
 
-    # --------------------------------------------------------
-    # Top 30
-    # --------------------------------------------------------
+    print(
+        f"Completed months    : "
+        f"{completed_months:,}"
+    )
+
+    print(
+        f"Eligible stocks     : "
+        f"{len(ranked):,}"
+    )
+
+    print(
+        f"Top 30 research     : "
+        f"{len(top30):,}"
+    )
+
+    print(
+        f"Top 10 portfolio    : "
+        f"{len(top10):,}"
+    )
+
+    # ========================================================
+    # HARD FILTERS
+    # ========================================================
 
     print()
-    print(LINE)
+
     print(
-        f"TOP {TOP_RESEARCH_STOCKS} RESEARCH STOCKS"
+        "HARD ELIGIBILITY FILTERS"
     )
-    print(LINE)
 
-    display_columns = [
-        "Research_Rank",
-        "Symbol",
-        "Close",
-        "Momentum_9M",
-        "Breakout_6M",
-        "Volume_Ratio",
-        "Combined_Score",
-    ]
+    print(
+        "-" * 100
+    )
 
-    available_columns = [
-        col
-        for col in display_columns
-        if col in ranked.columns
-    ]
+    print(
+        "Momentum_9M >= 0     : "
+        "ON"
+    )
 
-    display_top30 = ranked.head(
-        TOP_RESEARCH_STOCKS
-    )[available_columns].copy()
+    print(
+        "Breakout_6M >= 0     : "
+        "ON"
+    )
 
-    if not display_top30.empty:
+    print(
+        f"Volume_Ratio >= "
+        f"{VOLUME_MULTIPLIER:.2f}x : "
+        "ON"
+    )
 
-        print(
-            display_top30.to_string(
-                index=False,
-                formatters={
-                    "Close": (
-                        lambda x:
-                        f"{x:,.2f}"
-                    ),
-                    "Momentum_9M": (
-                        lambda x:
-                        f"{x * 100:.2f}%"
-                    ),
-                    "Breakout_6M": (
-                        lambda x:
-                        f"{x * 100:.2f}%"
-                    ),
-                    "Volume_Ratio": (
-                        lambda x:
-                        f"{x:.2f}x"
-                    ),
-                    "Combined_Score": (
-                        lambda x:
-                        f"{x * 100:.2f}%"
-                    ),
-                },
-            )
-        )
-
-    # --------------------------------------------------------
-    # Top 10
-    # --------------------------------------------------------
+    # ========================================================
+    # TOP 30
+    # ========================================================
 
     print()
-    print(LINE)
+
     print(
-        f"PORTFOLIO — TOP {TOP_PORTFOLIO_STOCKS}"
+        "TOP 30 QUALIFIED STOCKS"
     )
-    print(LINE)
 
-    if top10.empty:
+    print(
+        "-" * 100
+    )
+
+    if top30.empty:
 
         print(
-            "NO ELIGIBLE STOCKS."
-        )
-
-        print(
-            "Portfolio remains 100% CASH."
+            "No stocks satisfy all eligibility conditions."
         )
 
     else:
 
-        print(
-            f"Total capital             : "
-            f"Rs. {TOTAL_CAPITAL:,.2f}"
-        )
+        display_columns = [
+            "Research_Rank",
+            "Symbol",
+            "Close",
+            "Momentum_9M",
+            "Breakout_6M",
+            "Volume_Ratio",
+            "Combined_Score",
+        ]
+
+        available = [
+            column
+            for column in display_columns
+            if column in top30.columns
+        ]
+
+        table = top30[
+            available
+        ].copy()
+
+        # ----------------------------------------------------
+        # Percent columns
+        # ----------------------------------------------------
+
+        for column in [
+            "Momentum_9M",
+            "Breakout_6M",
+            "Combined_Score",
+        ]:
+
+            if column in table.columns:
+
+                table[column] = (
+                    table[column]
+                    * 100
+                ).round(2)
+
+        # ----------------------------------------------------
+        # Volume
+        # ----------------------------------------------------
+
+        if "Volume_Ratio" in table.columns:
+
+            table["Volume_Ratio"] = (
+                table["Volume_Ratio"]
+                .round(2)
+            )
+
+        # ----------------------------------------------------
+        # Price
+        # ----------------------------------------------------
+
+        if "Close" in table.columns:
+
+            table["Close"] = (
+                table["Close"]
+                .round(2)
+            )
 
         print(
-            f"Position size             : "
-            f"Rs. {TOTAL_CAPITAL / len(top10):,.2f}"
+            table.to_string(
+                index=False
+            )
         )
 
-        print()
+    # ========================================================
+    # TOP 10
+    # ========================================================
+
+    print()
+
+    print(
+        "TOP 10 PORTFOLIO"
+    )
+
+    print(
+        "-" * 100
+    )
+
+    if top10.empty:
+
+        print(
+            "NO QUALIFIED STOCKS."
+        )
+
+    else:
 
         portfolio_columns = [
             "Research_Rank",
@@ -2468,54 +2598,125 @@ def display_signal(
             "Target_Capital",
         ]
 
-        portfolio_columns = [
-            col
-            for col in portfolio_columns
-            if col in top10.columns
+        available = [
+            column
+            for column in portfolio_columns
+            if column in top10.columns
         ]
 
+        portfolio = top10[
+            available
+        ].copy()
+
+        for column in [
+            "Momentum_9M",
+            "Breakout_6M",
+            "Combined_Score",
+        ]:
+
+            if column in portfolio.columns:
+
+                portfolio[column] = (
+                    portfolio[column]
+                    * 100
+                ).round(2)
+
+        if "Volume_Ratio" in portfolio.columns:
+
+            portfolio["Volume_Ratio"] = (
+                portfolio["Volume_Ratio"]
+                .round(2)
+            )
+
+        if "Close" in portfolio.columns:
+
+            portfolio["Close"] = (
+                portfolio["Close"]
+                .round(2)
+            )
+
+        if "Target_Capital" in portfolio.columns:
+
+            portfolio["Target_Capital"] = (
+                portfolio["Target_Capital"]
+                .round(2)
+            )
+
         print(
-            top10[
-                portfolio_columns
-            ].to_string(
-                index=False,
-                formatters={
-                    "Close": (
-                        lambda x:
-                        f"{x:,.2f}"
-                    ),
-                    "Momentum_9M": (
-                        lambda x:
-                        f"{x * 100:.2f}%"
-                    ),
-                    "Breakout_6M": (
-                        lambda x:
-                        f"{x * 100:.2f}%"
-                    ),
-                    "Volume_Ratio": (
-                        lambda x:
-                        f"{x:.2f}x"
-                    ),
-                    "Combined_Score": (
-                        lambda x:
-                        f"{x * 100:.2f}%"
-                    ),
-                    "Target_Capital": (
-                        lambda x:
-                        f"Rs. {x:,.2f}"
-                    ),
-                },
+            portfolio.to_string(
+                index=False
             )
         )
 
-    # --------------------------------------------------------
-    # Orders
-    # --------------------------------------------------------
+        capital_per_position = (
+            TOTAL_CAPITAL
+            / TOP_PORTFOLIO_STOCKS
+        )
+
+        capital_allocated = (
+            len(top10)
+            * capital_per_position
+        )
+
+        cash_remaining = (
+            TOTAL_CAPITAL
+            - capital_allocated
+        )
+
+        print()
+
+        print(
+            f"Capital per position : "
+            f"₹{capital_per_position:,.2f}"
+        )
+
+        print(
+            f"Capital allocated     : "
+            f"₹{capital_allocated:,.2f}"
+        )
+
+        print(
+            f"Cash remaining        : "
+            f"₹{cash_remaining:,.2f}"
+        )
+
+    # ========================================================
+    # REGIME
+    # ========================================================
 
     print()
-    print(LINE)
-    print("REBALANCE ORDERS")
-    print(LINE)
+
+    print(
+        "REGIME"
+    )
+
+    print(
+        "-" * 100
+    )
+
+    print(
+        f"Market regime monitor : "
+        f"{regime_info['Regime']}"
+    )
+
+    print(
+        "Bear overlay          : "
+        f"{'ON' if ENABLE_BEAR_OVERLAY else 'OFF'}"
+    )
+
+    # ========================================================
+    # ORDERS
+    # ========================================================
+
+    print()
+
+    print(
+        "ORDERS"
+    )
+
+    print(
+        "-" * 100
+    )
 
     if orders.empty:
 
@@ -2527,22 +2728,9 @@ def display_signal(
 
         print(
             orders.to_string(
-                index=False,
-                formatters={
-                    "Target_Weight": (
-                        lambda x:
-                        f"{x * 100:.2f}%"
-                    ),
-                    "Target_Capital": (
-                        lambda x:
-                        f"Rs. {x:,.2f}"
-                    ),
-                },
+                index=False
             )
         )
-
-    print()
-    print(LINE)
 
 
 # ============================================================
@@ -2551,80 +2739,114 @@ def display_signal(
 
 def main() -> None:
 
-    overall_timer = Timer()
+    program_start = time.perf_counter()
 
-    print_header()
+    # ========================================================
+    # HEADER
+    # ========================================================
 
-    run_timestamp = datetime.now()
+    print_header(
+        PROJECT_NAME
+    )
 
     print(
-        f"Run timestamp              : "
-        f"{run_timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+        "FAST MONTHLY MOMENTUM + BREAKOUT "
+        "PRODUCTION SIGNAL ENGINE"
+    )
+
+    print()
+
+    print(
+        f"Strategy : {STRATEGY_NAME}"
+    )
+
+    print()
+
+    print(
+        "NEW LIVE FILTER:"
+    )
+
+    print(
+        "  Momentum_9M must be >= 0"
+    )
+
+    print(
+        "  Breakout_6M must be >= 0"
+    )
+
+    print(
+        "  Volume_Ratio must be >= 1.50x"
     )
 
     # ========================================================
-    # 1. REFRESH UNIVERSE
+    # STEP 1
+    #
+    # UNIVERSE
     # ========================================================
 
-    stage_timer = Timer()
-
-    print_stage(
-        "STAGE 1 — REFRESH NIFTY 500 UNIVERSE"
+    print_subheader(
+        "STEP 1 — PROJECT DATA"
     )
+
+    refresh_timer = Timer()
 
     refresh_universe_if_available()
 
-    print(
-        f"Universe refresh time      : "
-        f"{format_seconds(stage_timer.elapsed())}"
+    symbols = (
+        load_universe_symbols()
     )
 
-    # ========================================================
-    # 2. LOAD UNIVERSE
-    # ========================================================
-
-    stage_timer = Timer()
-
-    print_stage(
-        "STAGE 2 — LOAD UNIVERSE"
+    universe_count = len(
+        symbols
     )
-
-    symbols = load_universe_symbols()
 
     print(
-        f"Universe loading time      : "
-        f"{format_seconds(stage_timer.elapsed())}"
+        f"Universe file : "
+        f"{UNIVERSE_FILE}"
+    )
+
+    print(
+        f"Symbols       : "
+        f"{universe_count:,}"
+    )
+
+    print(
+        f"Universe refresh/load time : "
+        f"{refresh_timer.elapsed():.2f}s"
     )
 
     # ========================================================
-    # 3. LOAD DAILY MARKET DATA
+    # STEP 2
+    #
+    # DAILY MARKET DATA
     # ========================================================
 
-    stage_timer = Timer()
-
-    print_stage(
-        "STAGE 3 — DOWNLOAD DAILY MARKET DATA"
+    print_subheader(
+        "STEP 2 — MARKET DATA"
     )
 
-    daily_data, valid_symbols = (
-        load_daily_market_data(
-            symbols
+    (
+        daily_data,
+        valid_symbols,
+    ) = load_daily_market_data(
+        symbols
+    )
+
+    valid_daily_symbol_count = len(
+        set(
+            clean_symbol(symbol)
+            for symbol in valid_symbols
         )
     )
 
-    print(
-        f"Daily market data          : "
-        f"{format_seconds(stage_timer.elapsed())}"
-    )
-
     # ========================================================
-    # 4. CONVERT TO MONTHLY
+    # STEP 3
+    #
+    # MONTHLY DATA
     # ========================================================
 
-    stage_timer = Timer()
-
-    print_stage(
-        "STAGE 4 — CONVERT TO COMPLETED MONTHLY BARS"
+    print_subheader(
+        "STEP 3 — MONTHLY DATA"
     )
 
     monthly = (
@@ -2633,160 +2855,126 @@ def main() -> None:
         )
     )
 
-    # --------------------------------------------------------
-    # Validate months
-    # --------------------------------------------------------
-
-    completed_months = (
-        monthly["Month"]
-        .drop_duplicates()
-        .sort_values()
-    )
-
-    number_of_months = len(
-        completed_months
-    )
-
-    usable_symbols = (
-        monthly
-        .groupby("Symbol")["Month"]
+    usable_monthly_symbols = (
+        monthly["Symbol"]
         .nunique()
     )
 
-    usable_symbol_count = int(
-        (
-            usable_symbols
-            >= MIN_MONTHS_REQUIRED
-        ).sum()
+    completed_months = (
+        monthly["Date"]
+        .nunique()
     )
 
-    print(
-        f"Completed monthly months  : "
-        f"{number_of_months}"
-    )
+    if completed_months < MIN_MONTHS_REQUIRED:
 
-    print(
-        f"Usable monthly symbols     : "
-        f"{usable_symbol_count}"
-    )
-
-    if number_of_months < MIN_MONTHS_REQUIRED:
-
-        raise RuntimeError(
-            f"Only {number_of_months} completed "
-            f"months available.\n"
-            f"Minimum required: "
-            f"{MIN_MONTHS_REQUIRED}"
-        )
-
-    if usable_symbol_count == 0:
-
-        raise RuntimeError(
-            "No symbols have enough monthly history."
+        raise ValueError(
+            f"Only {completed_months} completed months "
+            f"available. Minimum required is "
+            f"{MIN_MONTHS_REQUIRED}."
         )
 
     save_monthly_cache(
         monthly
     )
 
-    print(
-        f"Monthly conversion         : "
-        f"{format_seconds(stage_timer.elapsed())}"
-    )
-
     # ========================================================
-    # 5. FEATURE ENGINE
+    # STEP 4
+    #
+    # FEATURES
     # ========================================================
 
-    stage_timer = Timer()
-
-    print_stage(
-        "STAGE 5 — CALCULATE MOMENTUM + BREAKOUT FEATURES"
-    )
-
-    features = calculate_monthly_features(
-        monthly
-    )
-
-    print(
-        f"Feature engine             : "
-        f"{format_seconds(stage_timer.elapsed())}"
-    )
-
-    # ========================================================
-    # 6. CURRENT SIGNAL
-    # ========================================================
-
-    stage_timer = Timer()
-
-    print_stage(
-        "STAGE 6 — GENERATE CURRENT MONTHLY SIGNAL"
-    )
-
-    ranked, top10, signal_month = (
-        generate_current_signal(
-            features
+    features = (
+        calculate_monthly_features(
+            monthly
         )
     )
 
-    if ranked.empty:
+    # ========================================================
+    # STEP 5
+    #
+    # CURRENT SIGNAL
+    # ========================================================
 
-        raise RuntimeError(
-            "No stocks passed the production filters."
+    (
+        ranked,
+        top30,
+        top10,
+        latest_date,
+    ) = generate_current_signal(
+        features
+    )
+
+    # ========================================================
+    # STEP 6
+    #
+    # REGIME MONITOR
+    # ========================================================
+
+    print_subheader(
+        "REGIME MONITOR"
+    )
+
+    regime_info = (
+        calculate_regime_monitor(
+            monthly
+        )
+    )
+
+    print(
+        f"Regime       : "
+        f"{regime_info['Regime']}"
+    )
+
+    if not pd.isna(
+        regime_info["Market_Proxy"]
+    ):
+
+        print(
+            f"Market proxy : "
+            f"{regime_info['Market_Proxy']:.3f}"
         )
 
+    if not pd.isna(
+        regime_info["Market_10M_MA"]
+    ):
+
+        print(
+            f"10M MA       : "
+            f"{regime_info['Market_10M_MA']:.3f}"
+        )
+
+    if not pd.isna(
+        regime_info["Previous_10M_MA"]
+    ):
+
+        print(
+            f"Previous MA  : "
+            f"{regime_info['Previous_10M_MA']:.3f}"
+        )
+
+    print()
+
     print(
-        f"Signal generation          : "
-        f"{format_seconds(stage_timer.elapsed())}"
+        "NOTE: Regime monitor is diagnostic only."
+    )
+
+    print(
+        "Locked R0 strategy remains unchanged."
+    )
+
+    print(
+        f"Bear overlay enabled : "
+        f"{ENABLE_BEAR_OVERLAY}"
     )
 
     # ========================================================
-    # 7. REGIME MONITOR
+    # STEP 7
+    #
+    # CURRENT HOLDINGS
     # ========================================================
 
-    stage_timer = Timer()
-
-    print_stage(
-        "STAGE 7 — CALCULATE REGIME MONITOR"
-    )
-
-    regime = calculate_regime_monitor(
-        monthly
-    )
-
-    print(
-        f"Regime monitor             : "
-        f"{regime.get('regime')}"
-    )
-
-    print(
-        f"Market proxy               : "
-        f"{regime.get('market_proxy')}"
-    )
-
-    print(
-        f"10M MA                     : "
-        f"{regime.get('ma_10m')}"
-    )
-
-    print(
-        f"10M MA previous            : "
-        f"{regime.get('ma_10m_previous')}"
-    )
-
-    print(
-        f"Regime calculation         : "
-        f"{format_seconds(stage_timer.elapsed())}"
-    )
-
-    # ========================================================
-    # 8. CURRENT HOLDINGS
-    # ========================================================
-
-    stage_timer = Timer()
-
-    print_stage(
-        "STAGE 8 — LOAD CURRENT HOLDINGS"
+    print_subheader(
+        "CURRENT HOLDINGS"
     )
 
     current_holdings = (
@@ -2794,210 +2982,228 @@ def main() -> None:
     )
 
     print(
-        f"Current holdings           : "
-        f"{len(current_holdings)}"
-    )
-
-    if current_holdings:
-
-        print(
-            "Existing positions:"
-        )
-
-        for symbol in current_holdings:
-            print(
-                f"    {symbol}"
-            )
-
-    else:
-
-        print(
-            "No current holdings file found."
-        )
-
-        print(
-            "Portfolio treated as empty."
-        )
-
-    print(
-        f"Holdings loading           : "
-        f"{format_seconds(stage_timer.elapsed())}"
+        f"Current holdings : "
+        f"{len(current_holdings):,}"
     )
 
     # ========================================================
-    # 9. GENERATE ORDERS
+    # STEP 8
+    #
+    # ORDER GENERATION
     # ========================================================
-
-    stage_timer = Timer()
-
-    print_stage(
-        "STAGE 9 — GENERATE REBALANCE ORDERS"
-    )
 
     orders = generate_orders(
-        top10,
-        current_holdings,
-    )
-
-    print(
-        f"Order generation           : "
-        f"{format_seconds(stage_timer.elapsed())}"
+        top10=top10,
+        current_holdings=current_holdings,
     )
 
     # ========================================================
-    # 10. SAVE REPORTS
+    # STEP 9
+    #
+    # FINAL RUNTIME
     # ========================================================
 
-    stage_timer = Timer()
+    program_end = time.perf_counter()
 
-    print_stage(
-        "STAGE 10 — SAVE REPORTS"
+    runtime_seconds = (
+        program_end
+        - program_start
     )
+
+    # ========================================================
+    # STEP 10
+    #
+    # SAVE CSV REPORTS
+    # ========================================================
 
     save_csv_reports(
         ranked=ranked,
+        top30=top30,
         top10=top10,
         orders=orders,
-        signal_month=signal_month,
-        regime=regime,
-        runtime_seconds=overall_timer.elapsed(),
-    )
-
-    save_excel_report(
-        ranked=ranked,
-        top10=top10,
-        orders=orders,
-        signal_month=signal_month,
-        regime=regime,
-        runtime_seconds=overall_timer.elapsed(),
-    )
-
-    print(
-        f"Report generation          : "
-        f"{format_seconds(stage_timer.elapsed())}"
+        universe_count=universe_count,
+        valid_daily_symbols=valid_daily_symbol_count,
+        usable_monthly_symbols=usable_monthly_symbols,
+        completed_months=completed_months,
+        latest_date=latest_date,
+        regime_info=regime_info,
+        runtime_seconds=runtime_seconds,
     )
 
     # ========================================================
-    # 11. DISPLAY FINAL SIGNAL
+    # STEP 11
+    #
+    # SAVE EXCEL
+    # ========================================================
+
+    save_excel_report(
+        ranked=ranked,
+        top30=top30,
+        top10=top10,
+        orders=orders,
+        universe_count=universe_count,
+        valid_daily_symbols=valid_daily_symbol_count,
+        usable_monthly_symbols=usable_monthly_symbols,
+        completed_months=completed_months,
+        latest_date=latest_date,
+        regime_info=regime_info,
+        runtime_seconds=runtime_seconds,
+    )
+
+    # ========================================================
+    # STEP 12
+    #
+    # DISPLAY
     # ========================================================
 
     display_signal(
         ranked=ranked,
+        top30=top30,
         top10=top10,
         orders=orders,
-        signal_month=signal_month,
-        regime=regime,
+        universe_count=universe_count,
+        valid_daily_symbols=valid_daily_symbol_count,
+        usable_monthly_symbols=usable_monthly_symbols,
+        completed_months=completed_months,
+        latest_date=latest_date,
+        regime_info=regime_info,
     )
 
     # ========================================================
     # FINAL SUMMARY
     # ========================================================
 
-    total_runtime = (
-        overall_timer.elapsed()
-    )
-
     print()
-    print(LINE)
-    print("RUN COMPLETE")
-    print(LINE)
 
     print(
-        f"Strategy                   : "
-        f"{STRATEGY_NAME}"
+        "=" * 100
     )
 
     print(
-        f"Signal month               : "
-        f"{signal_month.strftime('%Y-%m-%d')}"
+        "PRODUCTION RUN COMPLETE"
     )
 
     print(
-        f"Universe                   : "
-        f"{len(symbols)}"
+        "=" * 100
     )
 
     print(
-        f"Valid daily symbols        : "
-        f"{len(valid_symbols)}"
+        f"Universe              : "
+        f"{universe_count:,}"
     )
 
     print(
-        f"Usable monthly symbols     : "
-        f"{usable_symbol_count}"
+        f"Valid daily symbols   : "
+        f"{valid_daily_symbol_count:,}"
     )
 
     print(
-        f"Completed months           : "
-        f"{number_of_months}"
+        f"Usable monthly symbols: "
+        f"{usable_monthly_symbols:,}"
     )
 
     print(
-        f"Eligible stocks            : "
-        f"{len(ranked)}"
+        f"Completed months      : "
+        f"{completed_months:,}"
     )
 
     print(
-        f"Portfolio stocks           : "
-        f"{len(top10)}"
+        f"Eligible stocks       : "
+        f"{len(ranked):,}"
     )
 
     print(
-        f"Regime monitor             : "
-        f"{regime.get('regime')}"
+        f"Top 30 stocks         : "
+        f"{len(top30):,}"
     )
 
     print(
-        f"Bear overlay               : "
+        f"Top 10 stocks         : "
+        f"{len(top10):,}"
+    )
+
+    print(
+        f"Regime                : "
+        f"{regime_info['Regime']}"
+    )
+
+    print(
+        f"Bear overlay          : "
         f"{'ON' if ENABLE_BEAR_OVERLAY else 'OFF'}"
     )
 
+    print()
+
     print(
-        f"Total runtime              : "
-        f"{format_seconds(total_runtime)}"
+        "HARD FILTERS:"
+    )
+
+    print(
+        "  Momentum_9M >= 0     : ON"
+    )
+
+    print(
+        "  Breakout_6M >= 0     : ON"
+    )
+
+    print(
+        f"  Volume_Ratio >= "
+        f"{VOLUME_MULTIPLIER:.2f}x : ON"
     )
 
     print()
-    print("Output files:")
-    print(
-        f"    {CURRENT_SIGNAL_FILE}"
-    )
-    print(
-        f"    {TOP30_FILE}"
-    )
-    print(
-        f"    {ORDERS_FILE}"
-    )
-    print(
-        f"    {RUN_SUMMARY_FILE}"
-    )
 
-    if OPENPYXL_AVAILABLE:
-        print(
-            f"    {EXCEL_FILE}"
-        )
+    print(
+        f"Total runtime         : "
+        f"{runtime_seconds:.2f}s"
+    )
 
     print()
+
+    print(
+        "OUTPUT FILES:"
+    )
+
+    print(
+        f"  {CURRENT_SIGNAL_FILE}"
+    )
+
+    print(
+        f"  {TOP30_FILE}"
+    )
+
+    print(
+        f"  {ORDERS_FILE}"
+    )
+
+    print(
+        f"  {RUN_SUMMARY_FILE}"
+    )
+
+    print(
+        f"  {EXCEL_FILE}"
+    )
+
+    print()
+
     print(
         "IMPORTANT:"
     )
 
     print(
-        "    This production engine does NOT run the "
-        "strategy grid."
+        "Negative Momentum_9M and negative Breakout_6M "
+        "are excluded before ranking."
     )
 
     print(
-        "    It uses the locked strategy configuration."
+        "The additional non-negative filters should be "
+        "backtested before treating the modified strategy "
+        "as statistically validated."
     )
 
     print(
-        "    Bear overlay remains OFF because the locked "
-        "strategy is R0."
+        "=" * 100
     )
-
-    print()
-    print(LINE)
 
 
 # ============================================================
@@ -3013,37 +3219,33 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
 
         print()
-        print(LINE)
+
         print(
-            "PROGRAM INTERRUPTED BY USER"
+            "Program stopped by user."
         )
-        print(LINE)
-        sys.exit(130)
+
+        sys.exit(1)
 
     except Exception as exc:
 
         print()
-        print(LINE)
+
+        print(
+            "=" * 100
+        )
+
         print(
             "PROGRAM FAILED"
         )
-        print(LINE)
 
         print(
-            f"Error: {exc}"
+            "=" * 100
+        )
+
+        print(
+            f"Error: {type(exc).__name__}: {exc}"
         )
 
         print()
-
-        import traceback
-
-        traceback.print_exc()
-
-        print()
-        print(
-            "Check the error above before proceeding."
-        )
-
-        print(LINE)
 
         sys.exit(1)
