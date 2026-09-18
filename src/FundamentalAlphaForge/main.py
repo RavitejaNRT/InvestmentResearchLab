@@ -202,7 +202,7 @@ AVERAGE_VOLUME_DAYS = 20
 # ============================================================
 
 # Dalal accesses NSE/BSE data without requiring an API key.
-FUNDAMENTAL_SLEEP_SECONDS = 0.10
+FUNDAMENTAL_SLEEP_SECONDS = 0.05
 
 FUNDAMENTAL_PROGRESS_INTERVAL = 25
 
@@ -411,6 +411,8 @@ COVERAGE_SHEET = "Factor Coverage"
 
 STATISTICS_SHEET = "Score Statistics"
 
+MARKET_BREADTH_SHEET = "Market Breadth"
+
 
 # ============================================================
 # RUNTIME TRACKING
@@ -421,6 +423,66 @@ PROGRAM_START_TIME = None
 PROGRAM_END_TIME = None
 
 PROGRAM_ELAPSED_SECONDS = None
+
+# TEMPORARY RUNTIME INSTRUMENTATION - REMOVE AFTER PROFILING.
+# These counters accumulate cumulative wall-clock time across the run.
+RUNTIME_BREAKDOWN: dict[str, float] = {
+    "Universe": 0.0,
+    "Market-data download": 0.0,
+    "Market calculations": 0.0,
+    "BSE lookup": 0.0,
+    "Dalal meta": 0.0,
+    "Dalal fundamentals": 0.0,
+    "yfinance": 0.0,
+    "Fundamental processing total": 0.0,
+    "Scoring": 0.0,
+    "Excel generation": 0.0,
+}
+
+
+def add_runtime_measurement(name: str, elapsed_seconds: float) -> None:
+    """Accumulate runtime for a named stage."""
+
+    if elapsed_seconds < 0:
+        return
+
+    RUNTIME_BREAKDOWN[name] = (
+        RUNTIME_BREAKDOWN.get(name, 0.0)
+        + float(elapsed_seconds)
+    )
+
+
+def print_runtime_breakdown() -> None:
+    """Print the cumulative runtime profile for the current run."""
+
+    total_runtime = sum(RUNTIME_BREAKDOWN.values())
+
+    print()
+    print("=" * 80)
+    print("RUNTIME BREAKDOWN")
+    print("=" * 80)
+    print(f"Universe: {RUNTIME_BREAKDOWN.get('Universe', 0.0):.3f} sec")
+    print(
+        f"Market-data download: {RUNTIME_BREAKDOWN.get('Market-data download', 0.0):.3f} sec"
+    )
+    print(
+        f"Market calculations: {RUNTIME_BREAKDOWN.get('Market calculations', 0.0):.3f} sec"
+    )
+    print(f"BSE lookup: {RUNTIME_BREAKDOWN.get('BSE lookup', 0.0):.3f} sec")
+    print(f"Dalal meta: {RUNTIME_BREAKDOWN.get('Dalal meta', 0.0):.3f} sec")
+    print(
+        f"Dalal fundamentals: {RUNTIME_BREAKDOWN.get('Dalal fundamentals', 0.0):.3f} sec"
+    )
+    print(f"yfinance: {RUNTIME_BREAKDOWN.get('yfinance', 0.0):.3f} sec")
+    print(
+        f"Fundamental processing total: {RUNTIME_BREAKDOWN.get('Fundamental processing total', 0.0):.3f} sec"
+    )
+    print(f"Scoring: {RUNTIME_BREAKDOWN.get('Scoring', 0.0):.3f} sec")
+    print(
+        f"Excel generation: {RUNTIME_BREAKDOWN.get('Excel generation', 0.0):.3f} sec"
+    )
+    print(f"Total runtime: {total_runtime:.3f} sec")
+    print("=" * 80)
 
 
 # ============================================================
@@ -558,6 +620,8 @@ def load_universe_from_file() -> list[str]:
 
 def refresh_and_load_universe() -> list[str]:
 
+    stage_start = time.perf_counter()
+
     print_header(
         "FUNDAMENTALALPHAFORGE — UNIVERSE"
     )
@@ -584,6 +648,11 @@ def refresh_and_load_universe() -> list[str]:
 
     print(
         f"Loaded universe: {len(symbols):,} symbols"
+    )
+
+    add_runtime_measurement(
+        "Universe",
+        time.perf_counter() - stage_start,
     )
 
     return symbols
@@ -1144,6 +1213,291 @@ def calculate_stock_metrics(
 
 
 # ============================================================
+# NIFTY 500 MARKET BREADTH — EMA PARTICIPATION
+# ============================================================
+
+def calculate_nifty500_ema_breadth(
+    data: pd.DataFrame,
+    symbols: list[str],
+) -> dict:
+    """Calculate Nifty 500 participation above 20D/50D/200D EMAs.
+
+    Date handling:
+    - Program run date is reported separately.
+    - The latest available market-data date is the maximum latest date
+      across the Nifty 500 stocks.
+    - Each stock is assigned its own latest available data date.
+    - Stocks whose latest available date is not the overall latest date
+      are excluded from the EMA breadth denominator.
+    - The distribution of stocks by latest available data date is reported
+      so missing/stale market data is visible.
+
+    This is an isolated reporting calculation. It does not modify the existing
+    market/fundamental research dataframe or any existing scoring logic.
+    """
+
+    print_header(
+        "CALCULATING NIFTY 500 EMA MARKET BREADTH"
+    )
+
+    program_run_date = datetime.now().date()
+    prepared_series: dict[str, pd.Series] = {}
+    latest_date_by_symbol: dict[str, pd.Timestamp] = {}
+
+    for symbol in symbols:
+        close = extract_symbol_series(
+            data,
+            "Close",
+            symbol,
+        )
+
+        if close is None:
+            continue
+
+        try:
+            normalized_index = pd.to_datetime(
+                close.index,
+                errors="coerce",
+            )
+        except (TypeError, ValueError):
+            continue
+
+        close = close.copy()
+        close.index = normalized_index
+        close = close[~close.index.isna()]
+        close = close[~close.index.duplicated(keep="last")]
+        close = pd.to_numeric(
+            close,
+            errors="coerce",
+        )
+        close = close.replace(
+            [np.inf, -np.inf],
+            np.nan,
+        ).dropna().sort_index()
+
+        if len(close) < MIN_TRADING_DAYS:
+            continue
+
+        latest_date = close.index[-1]
+        prepared_series[symbol] = close
+        latest_date_by_symbol[symbol] = latest_date
+
+    if not latest_date_by_symbol:
+        raise RuntimeError(
+            "No Nifty 500 stocks have sufficient price history for EMA breadth."
+        )
+
+    # ------------------------------------------------------------
+    # DATA DATE DIAGNOSTICS
+    # ------------------------------------------------------------
+    latest_market_date = max(latest_date_by_symbol.values())
+    earliest_market_date = min(latest_date_by_symbol.values())
+
+    latest_date_counts: dict[pd.Timestamp, int] = {}
+
+    for latest_date in latest_date_by_symbol.values():
+        date_key = pd.Timestamp(latest_date).normalize()
+        latest_date_counts[date_key] = (
+            latest_date_counts.get(date_key, 0) + 1
+        )
+
+    print(
+        f"Program run date: {program_run_date}"
+    )
+    print(
+        f"Latest available market-data date: {latest_market_date.date()}"
+    )
+    print(
+        f"Earliest latest-data date: {earliest_market_date.date()}"
+    )
+    print()
+    print("Latest available data by date:")
+
+    for date_key in sorted(
+        latest_date_counts,
+        reverse=True,
+    ):
+        print(
+            f"{date_key.date()}: "
+            f"{latest_date_counts[date_key]:,} stocks"
+        )
+
+    # ------------------------------------------------------------
+    # EMA BREADTH
+    # ------------------------------------------------------------
+    # IMPORTANT: only stocks whose own latest observation is on the
+    # overall latest market-data date participate in the breadth.
+    # Stocks whose latest data is on an earlier date are excluded.
+    common_date = latest_market_date
+
+    valid_count = 0
+    above_20 = 0
+    above_50 = 0
+    above_200 = 0
+
+    for symbol, close in prepared_series.items():
+        stock_latest_date = latest_date_by_symbol[symbol]
+
+        if stock_latest_date != common_date:
+            continue
+
+        common_close = close.loc[:common_date]
+
+        if len(common_close) < MIN_TRADING_DAYS:
+            continue
+
+        latest_close = safe_float(
+            common_close.iloc[-1]
+        )
+
+        if pd.isna(latest_close) or latest_close <= 0:
+            continue
+
+        ema20 = safe_float(
+            common_close.ewm(
+                span=20,
+                adjust=False,
+                min_periods=20,
+            ).mean().iloc[-1]
+        )
+        ema50 = safe_float(
+            common_close.ewm(
+                span=50,
+                adjust=False,
+                min_periods=50,
+            ).mean().iloc[-1]
+        )
+        ema200 = safe_float(
+            common_close.ewm(
+                span=200,
+                adjust=False,
+                min_periods=200,
+            ).mean().iloc[-1]
+        )
+
+        if any(
+            pd.isna(value)
+            for value in (ema20, ema50, ema200)
+        ):
+            continue
+
+        valid_count += 1
+
+        if latest_close > ema20:
+            above_20 += 1
+
+        if latest_close > ema50:
+            above_50 += 1
+
+        if latest_close > ema200:
+            above_200 += 1
+
+    if valid_count == 0:
+        raise RuntimeError(
+            "No Nifty 500 stocks could be evaluated for EMA breadth "
+            f"on {common_date.date()}."
+        )
+
+    pct_20 = above_20 / valid_count * 100
+    pct_50 = above_50 / valid_count * 100
+    pct_200 = above_200 / valid_count * 100
+
+    def breadth_status(value: float) -> str:
+        if value >= 70:
+            return "High"
+        if value >= 50:
+            return "Moderate"
+        return "Low"
+
+    if (
+        pct_20 > pct_50 > pct_200
+    ):
+        pattern = (
+            "Short-term participation is stronger than medium- and "
+            "long-term participation."
+        )
+    elif (
+        pct_20 < pct_50 < pct_200
+    ):
+        pattern = (
+            "Short-term participation is weaker than medium- and "
+            "long-term participation."
+        )
+    elif (
+        pct_20 >= 70
+        and pct_50 >= 70
+        and pct_200 >= 70
+    ):
+        pattern = (
+            "Broad participation across short-, medium-, and long-term trends."
+        )
+    elif (
+        pct_20 < 50
+        and pct_50 < 50
+        and pct_200 < 50
+    ):
+        pattern = (
+            "Low participation across short-, medium-, and long-term trends."
+        )
+    else:
+        pattern = (
+            "Mixed market breadth across different trend timeframes."
+        )
+
+    result = {
+        "Program Run Date": pd.Timestamp(program_run_date),
+        "Breadth Date": common_date,
+        "Latest Available Market Data Date": latest_market_date,
+        "Earliest Latest-Data Date": earliest_market_date,
+        "Latest Data Date Distribution": "; ".join(
+            f"{date_key.date()}: {latest_date_counts[date_key]}"
+            for date_key in sorted(
+                latest_date_counts,
+                reverse=True,
+            )
+        ),
+        "Valid NIFTY 500 Stocks": valid_count,
+        "Stocks Above 20D EMA": above_20,
+        "% Above 20D EMA": pct_20,
+        "20D EMA Breadth Status": breadth_status(pct_20),
+        "Stocks Above 50D EMA": above_50,
+        "% Above 50D EMA": pct_50,
+        "50D EMA Breadth Status": breadth_status(pct_50),
+        "Stocks Above 200D EMA": above_200,
+        "% Above 200D EMA": pct_200,
+        "200D EMA Breadth Status": breadth_status(pct_200),
+        "20D EMA Breadth Minus 50D EMA Breadth": pct_20 - pct_50,
+        "50D EMA Breadth Minus 200D EMA Breadth": pct_50 - pct_200,
+        "Market Breadth Pattern": pattern,
+    }
+
+    print()
+    print(
+        f"Breadth date: {common_date.date()}"
+    )
+    print(
+        f"Valid Nifty 500 stocks: {valid_count:,}"
+    )
+    print(
+        f"Above 20D EMA: {above_20:,} ({pct_20:.2f}%) — "
+        f"{breadth_status(pct_20)}"
+    )
+    print(
+        f"Above 50D EMA: {above_50:,} ({pct_50:.2f}%) — "
+        f"{breadth_status(pct_50)}"
+    )
+    print(
+        f"Above 200D EMA: {above_200:,} ({pct_200:.2f}%) — "
+        f"{breadth_status(pct_200)}"
+    )
+    print(
+        f"Market Breadth Pattern: {pattern}"
+    )
+
+    return result
+
+
+# ============================================================
 # BUILD MARKET DATAFRAME
 # ============================================================
 
@@ -1151,6 +1505,8 @@ def build_research_dataframe(
     data: pd.DataFrame,
     valid_symbols: list[str],
 ) -> pd.DataFrame:
+
+    stage_start = time.perf_counter()
 
     print_header(
         "CALCULATING MARKET FACTORS"
@@ -1197,6 +1553,11 @@ def build_research_dataframe(
 
     print(
         f"Stocks with usable data: {len(df):,}"
+    )
+
+    add_runtime_measurement(
+        "Market calculations",
+        time.perf_counter() - stage_start,
     )
 
     return df
@@ -1532,6 +1893,8 @@ def calculate_market_research_score(
 _DALAL_CLIENT = None
 _BSE_SESSION = None
 _BSE_LOOKUP_CACHE: dict[str, list[dict]] = {}
+_DALAL_FUNDAMENTALS_CACHE: dict[str, dict] = {}
+_DALAL_META_CACHE: dict[str, dict] = {}
 _YAHOO_FUNDAMENTAL_CACHE: dict[str, dict] = {}
 _YAHOO_SESSION = None
 
@@ -1607,6 +1970,19 @@ def normalize_bse_search_symbol(
         value = value[:-3]
 
     return value
+
+
+def normalize_bse_code(
+    value,
+) -> str:
+    """Normalize BSE codes for per-run memoization."""
+
+    if value is None:
+        return ""
+
+    return "".join(
+        char for char in str(value).strip() if char.isdigit()
+    )
 
 
 def normalize_security_token(
@@ -1735,6 +2111,7 @@ def lookup_bse_candidates(
     )
 
     session = get_bse_session()
+    stage_start = time.perf_counter()
 
     for attempt in range(
         1,
@@ -1766,6 +2143,11 @@ def lookup_bse_candidates(
 
             _BSE_LOOKUP_CACHE[search_symbol] = candidates
 
+            add_runtime_measurement(
+                "BSE lookup",
+                time.perf_counter() - stage_start,
+            )
+
             return candidates
 
         except Exception as error:
@@ -1778,6 +2160,11 @@ def lookup_bse_candidates(
                 )
 
                 _BSE_LOOKUP_CACHE[search_symbol] = []
+
+                add_runtime_measurement(
+                    "BSE lookup",
+                    time.perf_counter() - stage_start,
+                )
 
                 return []
 
@@ -2101,6 +2488,8 @@ def fetch_yfinance_yoy_growth(
     if symbol in _YFINANCE_GROWTH_CACHE:
         return _YFINANCE_GROWTH_CACHE[symbol]
 
+    stage_start = time.perf_counter()
+
     result = {
         "yoy_revenue_growth": np.nan,
         "yoy_net_profit_growth": np.nan,
@@ -2172,6 +2561,11 @@ def fetch_yfinance_yoy_growth(
 
     _YFINANCE_GROWTH_CACHE[symbol] = result
 
+    add_runtime_measurement(
+        "yfinance",
+        time.perf_counter() - stage_start,
+    )
+
     return result
 
 
@@ -2201,24 +2595,68 @@ def fetch_dalal_fundamental_data(
     if not bse_code:
         return None
 
-    fundamentals = None
-    meta = None
+    normalized_bse_code = normalize_bse_code(bse_code)
+
+    if not normalized_bse_code:
+        return None
+
+    fundamentals = _DALAL_FUNDAMENTALS_CACHE.get(
+        normalized_bse_code
+    )
+    meta = _DALAL_META_CACHE.get(normalized_bse_code)
     last_error = None
 
-    for attempt in range(
-        1,
-        DALAL_RETRY_COUNT + 1,
-    ):
-        try:
-            fundamentals = dalal_client.fundamentals(bse_code)
-            meta = dalal_client.meta(bse_code)
-            break
-        except Exception as error:
-            last_error = error
-            if attempt < DALAL_RETRY_COUNT:
-                time.sleep(
-                    DALAL_RETRY_SLEEP_SECONDS * attempt
-                )
+    if fundamentals is not None and meta is not None:
+        pass
+    else:
+        for attempt in range(
+            1,
+            DALAL_RETRY_COUNT + 1,
+        ):
+            try:
+                if fundamentals is None:
+                    fundamentals_start = time.perf_counter()
+                    fetched_fundamentals = dalal_client.fundamentals(
+                        normalized_bse_code
+                    )
+                    add_runtime_measurement(
+                        "Dalal fundamentals",
+                        time.perf_counter() - fundamentals_start,
+                    )
+
+                    if isinstance(fetched_fundamentals, dict):
+                        if fetched_fundamentals:
+                            _DALAL_FUNDAMENTALS_CACHE[
+                                normalized_bse_code
+                            ] = fetched_fundamentals
+                            fundamentals = fetched_fundamentals
+
+                if meta is None:
+                    meta_start = time.perf_counter()
+                    fetched_meta = dalal_client.meta(
+                        normalized_bse_code
+                    )
+                    add_runtime_measurement(
+                        "Dalal meta",
+                        time.perf_counter() - meta_start,
+                    )
+
+                    if isinstance(fetched_meta, dict):
+                        if fetched_meta:
+                            _DALAL_META_CACHE[normalized_bse_code] = (
+                                fetched_meta
+                            )
+                            meta = fetched_meta
+
+                if fundamentals is not None and meta is not None:
+                    break
+
+            except Exception as error:
+                last_error = error
+                if attempt < DALAL_RETRY_COUNT:
+                    time.sleep(
+                        DALAL_RETRY_SLEEP_SECONDS * attempt
+                    )
 
     if not isinstance(fundamentals, dict):
         fundamentals = {}
@@ -2358,6 +2796,8 @@ def build_fundamental_dataframe(
     symbols: list[str],
 ) -> pd.DataFrame:
     """Fetch Dalal fundamentals for the complete Nifty 500 universe."""
+
+    stage_start = time.perf_counter()
 
     print_header(
         "DOWNLOADING FUNDAMENTAL DATA"
@@ -2544,6 +2984,11 @@ def build_fundamental_dataframe(
     print(
         f"Meta payloads available          : "
         f"{meta_available:,}"
+    )
+
+    add_runtime_measurement(
+        "Fundamental processing total",
+        time.perf_counter() - stage_start,
     )
 
     return fundamentals_df
@@ -5447,7 +5892,10 @@ def build_excel_dashboard(
     universe_count: int,
     valid_symbol_count: int,
     output_file: Path,
+    market_breadth: dict,
 ) -> None:
+
+    stage_start = time.perf_counter()
 
     print_header(
         "BUILDING EXCEL DASHBOARD"
@@ -5499,6 +5947,91 @@ def build_excel_dashboard(
         workbook,
         df,
     )
+
+    # --------------------------------------------------------
+    # Market Breadth
+    # --------------------------------------------------------
+
+    breadth_ws = workbook.create_sheet(
+        MARKET_BREADTH_SHEET,
+    )
+
+    breadth_ws.sheet_view.showGridLines = False
+
+    style_dashboard_title(
+        breadth_ws,
+        "A1:N2",
+        "MARKET BREADTH — NIFTY 500 EMA PARTICIPATION",
+    )
+
+    breadth_headers = list(
+        market_breadth.keys()
+    )
+
+    breadth_ws.append(
+        breadth_headers
+    )
+
+    breadth_ws.append(
+        [
+            market_breadth.get(header)
+            for header in breadth_headers
+        ]
+    )
+
+    for cell in breadth_ws[3]:
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
+
+    for cell in breadth_ws[4]:
+        cell.alignment = Alignment(
+            vertical="top",
+            wrap_text=True,
+        )
+
+    breadth_ws[3][0].number_format = "yyyy-mm-dd"
+
+    percentage_headers = {
+        "% Above 20D EMA",
+        "% Above 50D EMA",
+        "% Above 200D EMA",
+        "20D EMA Breadth Minus 50D EMA Breadth",
+        "50D EMA Breadth Minus 200D EMA Breadth",
+    }
+
+    for column_index, header in enumerate(
+        breadth_headers,
+        start=1,
+    ):
+        if header in percentage_headers:
+            breadth_ws.cell(
+                row=4,
+                column=column_index,
+            ).number_format = "0.00"
+
+    breadth_ws.freeze_panes = "A4"
+
+    for column_index, header in enumerate(
+        breadth_headers,
+        start=1,
+    ):
+        width = max(
+            15,
+            min(
+                42,
+                len(header) + 3,
+            ),
+        )
+        breadth_ws.column_dimensions[
+            get_column_letter(column_index)
+        ].width = width
+
+    breadth_ws.row_dimensions[3].height = 42
+    breadth_ws.row_dimensions[4].height = 55
 
     # --------------------------------------------------------
     # Dashboard
@@ -6505,6 +7038,15 @@ def build_excel_dashboard(
         f"  4. {STATISTICS_SHEET}"
     )
 
+    print(
+        f"  5. {MARKET_BREADTH_SHEET}"
+    )
+
+    add_runtime_measurement(
+        "Excel generation",
+        time.perf_counter() - stage_start,
+    )
+
 
 # ============================================================
 # SAVE RESULTS TO EXCEL
@@ -6608,6 +7150,8 @@ def main() -> None:
         "Downloading market data..."
     )
 
+    market_data_start = time.perf_counter()
+
     suppressed_output = io.StringIO()
 
     with redirect_stdout(
@@ -6620,6 +7164,11 @@ def main() -> None:
                 period=HISTORICAL_PERIOD,
             )
         )
+
+    add_runtime_measurement(
+        "Market-data download",
+        time.perf_counter() - market_data_start,
+    )
 
     print(
         "Market data download completed."
@@ -6688,6 +7237,8 @@ def main() -> None:
     # STEP 5
     # MOMENTUM
     # ========================================================
+
+    scoring_start = time.perf_counter()
 
     print_header(
         "CALCULATING MOMENTUM SCORE"
@@ -6918,6 +7469,11 @@ def main() -> None:
         "Combined Research Score calculated."
     )
 
+    add_runtime_measurement(
+        "Scoring",
+        time.perf_counter() - scoring_start,
+    )
+
     # ========================================================
     # STEP 18
     # UNIVERSE SUMMARY
@@ -6929,6 +7485,16 @@ def main() -> None:
 
     # ========================================================
     # STEP 19
+    # NIFTY 500 MARKET BREADTH
+    # ========================================================
+
+    market_breadth = calculate_nifty500_ema_breadth(
+        data,
+        symbols,
+    )
+
+    # ========================================================
+    # STEP 20
     # MARKET RANKINGS
     # ========================================================
 
@@ -6937,7 +7503,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 20
+    # STEP 21
     # FUNDAMENTAL RANKINGS
     # ========================================================
 
@@ -6946,7 +7512,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 21
+    # STEP 22
     # COMBINED RANKINGS
     # ========================================================
 
@@ -6955,7 +7521,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 22
+    # STEP 23
     # DETAILED
     # ========================================================
 
@@ -6964,7 +7530,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 23
+    # STEP 24
     # FACTOR LEADERS
     # ========================================================
 
@@ -6973,7 +7539,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 24
+    # STEP 25
     # RESEARCH CANDIDATES
     # ========================================================
 
@@ -6982,7 +7548,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 25
+    # STEP 26
     # SCORE DISTRIBUTION
     # ========================================================
 
@@ -6991,7 +7557,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 26
+    # STEP 27
     # FINAL TIMESTAMP
     #
     # Capture the completed research runtime BEFORE Excel
@@ -7006,7 +7572,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 27
+    # STEP 28
     # EXCEL OUTPUT
     # ========================================================
 
@@ -7019,10 +7585,11 @@ def main() -> None:
         universe_count=len(symbols),
         valid_symbol_count=len(valid_symbols),
         output_file=EXCEL_OUTPUT_FILE,
+        market_breadth=market_breadth,
     )
 
     # ========================================================
-    # STEP 28
+    # STEP 29
     # RESEARCH NOTES
     # ========================================================
 
@@ -7082,6 +7649,8 @@ def main() -> None:
         f"{elapsed_minutes:02d}:"
         f"{elapsed_seconds:05.2f}"
     )
+
+    print_runtime_breakdown()
 
     print()
 
