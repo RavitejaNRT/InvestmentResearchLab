@@ -529,6 +529,14 @@ def format_display_table(
 
     result = table.copy()
 
+    # Display-only label; the underlying field remains market_cap_crore.
+    if "market_cap_crore" in result.columns:
+        result = result.rename(
+            columns={
+                "market_cap_crore": "Market Cap (In Cr)",
+            }
+        )
+
     for column in result.columns:
 
         if pd.api.types.is_numeric_dtype(
@@ -2491,6 +2499,14 @@ def fetch_yfinance_yoy_growth(
     stage_start = time.perf_counter()
 
     result = {
+        # Classification — yfinance company profile
+        "sector": "N/A",
+        "industry": "N/A",
+
+        # Market capitalization in INR Crores. Yahoo Finance
+        # returns marketCap in INR, so divide by 1 crore (1e7).
+        "market_cap_crore": np.nan,
+
         "yoy_revenue_growth": np.nan,
         "yoy_net_profit_growth": np.nan,
         "yoy_eps_growth": np.nan,
@@ -2509,6 +2525,15 @@ def fetch_yfinance_yoy_growth(
 
         if not isinstance(info, dict):
             info = {}
+
+        # Sector and industry are descriptive Yahoo Finance company-profile
+        # fields. They do not participate in any scoring or ranking logic.
+        result["sector"] = str(info.get("sector") or "N/A").strip()
+        result["industry"] = str(info.get("industry") or "N/A").strip()
+
+        market_cap_raw = safe_float(info.get("marketCap"))
+        if pd.notna(market_cap_raw) and market_cap_raw > 0:
+            result["market_cap_crore"] = market_cap_raw / 1e7
 
         revenue_growth = _get_yfinance_info_value(
             info,
@@ -2719,6 +2744,11 @@ def fetch_dalal_fundamental_data(
 
     return {
         "symbol": symbol,
+
+        # Company classification — yfinance
+        "sector": yahoo_yoy.get("sector", "N/A"),
+        "industry": yahoo_yoy.get("industry", "N/A"),
+        "market_cap_crore": yahoo_yoy.get("market_cap_crore", np.nan),
 
         # Dalal / BSE identifiers and provenance
         "bse_code": bse_code,
@@ -3913,7 +3943,12 @@ def display_market_rankings(
 
         "symbol",
 
+        "sector",
+
+        "industry",
+
         "price",
+        "market_cap_crore",
 
         "return_3m",
 
@@ -4011,7 +4046,12 @@ def display_fundamental_rankings(
 
         "symbol",
 
+        "sector",
+
+        "industry",
+
         "price",
+        "market_cap_crore",
 
         "roe",
         "profit_margin",
@@ -4120,7 +4160,12 @@ def display_combined_rankings(
 
         "symbol",
 
+        "sector",
+
+        "industry",
+
         "price",
+        "market_cap_crore",
 
         "market_research_score",
 
@@ -4208,6 +4253,7 @@ def display_top_detailed(
         "symbol",
 
         "price",
+        "market_cap_crore",
 
         "return_3m",
         "return_6m",
@@ -4364,6 +4410,8 @@ def display_factor_leaders(
             df[
                 [
                     "symbol",
+                    "sector",
+                    "industry",
                     column,
                 ]
             ]
@@ -4383,6 +4431,8 @@ def display_factor_leaders(
                 {
                     "Factor": factor_name,
                     "Symbol": row["symbol"],
+                    "Sector": row.get("sector", "N/A"),
+                    "Industry": row.get("industry", "N/A"),
                     "Value": round(
                         safe_float(
                             row[column]
@@ -4494,7 +4544,12 @@ def display_research_candidates(
 
         "symbol",
 
+        "sector",
+
+        "industry",
+
         "price",
+        "market_cap_crore",
 
         "market_research_score",
 
@@ -4978,7 +5033,7 @@ def write_dataframe_to_sheet(
         cell = ws.cell(
             row=1,
             column=column_index,
-            value=str(column),
+            value=str(display_column),
         )
 
         cell.font = Font(
@@ -5275,6 +5330,12 @@ def write_table(
         dataframe.columns,
         start=start_col,
     ):
+
+        display_column = (
+            "Market Cap (In Cr)"
+            if column == "market_cap_crore"
+            else column
+        )
 
         cell = ws.cell(
             row=row,
@@ -6268,6 +6329,7 @@ def build_excel_dashboard(
         "final_rank",
         "symbol",
         "price",
+        "market_cap_crore",
         "market_research_score",
         "fundamental_score",
         "fundamental_data_completeness",
@@ -6317,6 +6379,7 @@ def build_excel_dashboard(
     top_market_columns = [
         "symbol",
         "price",
+        "market_cap_crore",
         "momentum_score",
         "trend_score",
         "risk_score",
@@ -7333,6 +7396,9 @@ def main() -> None:
 
             *ALL_FUNDAMENTAL_FACTORS,
 
+            "sector",
+            "industry",
+            "market_cap_crore",
             "bse_code",
             "bse_company_name",
             "bse_security_symbol",
