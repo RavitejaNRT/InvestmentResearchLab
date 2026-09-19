@@ -6,6 +6,7 @@ Production Monthly Momentum + Breakout Signal Engine
 
 LOCKED RESEARCH STRATEGY
 ------------------------
+
 COMB_M9S0_B6_V1.5_T0_R0_N10_RB1
 
 Meaning:
@@ -21,6 +22,7 @@ Meaning:
 
 LIVE ELIGIBILITY RULE
 ---------------------
+
 A stock is eligible for ranking only when:
 
     Momentum_9M >= 0
@@ -37,26 +39,29 @@ Therefore:
 
 PRODUCTION WORKFLOW
 -------------------
+
 1. Refresh current Nifty 500 universe.
 2. Load Nifty 500 symbols.
 3. Download 5 years of daily OHLCV data.
-4. Convert daily data to completed monthly bars.
-5. Calculate:
+4. Calculate daily EMA market breadth.
+5. Convert daily data to completed monthly bars.
+6. Calculate:
        - 9M momentum
        - 6M breakout
        - volume ratio
-6. Apply hard eligibility filters.
-7. Rank eligible stocks.
-8. Display Top 30 research candidates.
-9. Select Top 10 portfolio candidates.
-10. Generate BUY / HOLD / SELL instructions.
-11. Generate CSV reports.
-12. Generate Excel report.
-13. Calculate diagnostic market regime.
-14. Bear overlay remains OFF by default.
+7. Apply hard eligibility filters.
+8. Rank eligible stocks.
+9. Display Top 30 research candidates.
+10. Select Top 10 portfolio candidates.
+11. Generate BUY / HOLD / SELL instructions.
+12. Generate CSV reports.
+13. Generate Excel report.
+14. Calculate diagnostic market regime.
+15. Bear overlay remains OFF by default.
 
 SIGNAL TIMING
 -------------
+
 The signal is generated using the latest COMPLETED monthly candle.
 
 Intended execution:
@@ -64,6 +69,7 @@ Intended execution:
 
 IMPORTANT
 ---------
+
 The non-negative Momentum/Breakout rules are additional live
 eligibility constraints. They must be independently backtested
 before being considered statistically validated.
@@ -134,6 +140,18 @@ except ImportError as exc:
 
 
 # ============================================================
+# OPTIONAL YFINANCE IMPORT
+# ============================================================
+
+try:
+    import yfinance as yf
+
+except ImportError:
+
+    yf = None
+
+
+# ============================================================
 # CONFIGURATION
 # ============================================================
 
@@ -193,6 +211,17 @@ MIN_MONTHS_REQUIRED = 15
 # ============================================================
 
 ENABLE_BEAR_OVERLAY = False
+
+
+# ============================================================
+# EMA MARKET BREADTH PARAMETERS
+# ============================================================
+
+EMA_PERIODS = [
+    20,
+    50,
+    200,
+]
 
 
 # ============================================================
@@ -336,6 +365,153 @@ def safe_float(
     ):
 
         return np.nan
+
+
+def format_indian_number(
+    value,
+) -> str:
+
+    """
+    Format numbers using Indian comma grouping.
+
+    Examples:
+        172500    -> 1,72,500
+        5000      -> 5,000
+        1250000   -> 12,50,000
+    """
+
+    try:
+
+        if pd.isna(value):
+
+            return ""
+
+        number = float(value)
+
+        if not np.isfinite(number):
+
+            return ""
+
+        if number.is_integer():
+
+            return f"{int(number):,}".replace(
+                ",",
+                ",",
+                1,
+            ) if False else indian_integer_format(
+                int(number)
+            )
+
+        integer_part = int(number)
+        decimal_part = abs(number - integer_part)
+
+        formatted_integer = indian_integer_format(
+            abs(integer_part)
+        )
+
+        if integer_part < 0:
+
+            formatted_integer = (
+                "-" + formatted_integer
+            )
+
+        decimal_string = (
+            f"{decimal_part:.2f}"
+            .split(".")[1]
+            .rstrip("0")
+        )
+
+        if decimal_string:
+
+            return (
+                f"{formatted_integer}."
+                f"{decimal_string}"
+            )
+
+        return formatted_integer
+
+    except (
+        TypeError,
+        ValueError,
+    ):
+
+        return ""
+
+
+def indian_integer_format(
+    number: int,
+) -> str:
+
+    """
+    Convert integer to Indian comma grouping.
+
+    172500 -> 1,72,500
+    """
+
+    negative = number < 0
+
+    value = str(abs(int(number)))
+
+    if len(value) <= 3:
+
+        result = value
+
+    else:
+
+        last_three = value[-3:]
+
+        remaining = value[:-3]
+
+        groups = []
+
+        while len(remaining) > 2:
+
+            groups.insert(
+                0,
+                remaining[-2:],
+            )
+
+            remaining = remaining[:-2]
+
+        if remaining:
+
+            groups.insert(
+                0,
+                remaining,
+            )
+
+        result = (
+            ",".join(groups)
+            + ","
+            + last_three
+        )
+
+    if negative:
+
+        return "-" + result
+
+    return result
+
+
+def format_market_cap_column(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+
+    """
+    Create a display copy of Market Cap (In Cr)
+    using Indian number formatting.
+    """
+
+    result = df.copy()
+
+    if "Market Cap (In Cr)" in result.columns:
+
+        result["Market Cap (In Cr)"] = (
+            result["Market Cap (In Cr)"]
+            .apply(format_indian_number)
+        )
+
+    return result
 
 
 # ============================================================
@@ -859,6 +1035,709 @@ def get_field(
     raise KeyError(
         f"Could not extract field '{field}'."
     )
+
+
+# ============================================================
+# NIFTY 500 EMA MARKET BREADTH
+# ============================================================
+
+def classify_breadth_percentage(
+    percentage: float,
+) -> str:
+
+    if pd.isna(percentage):
+
+        return "UNKNOWN"
+
+    if percentage >= 70.0:
+
+        return "High"
+
+    if percentage >= 50.0:
+
+        return "Medium"
+
+    return "Low"
+
+
+def calculate_ema_market_breadth(
+    daily_data: pd.DataFrame,
+) -> dict:
+
+    """
+    Calculate Nifty 500 EMA market breadth.
+
+    Breadth is measured on the latest common available
+    market-data date.
+
+    For each stock:
+        Close > 20D EMA
+        Close > 50D EMA
+        Close > 200D EMA
+
+    Classification:
+        >= 70%      High
+        50% to <70% Medium
+        <50%        Low
+    """
+
+    print_header(
+        "CALCULATING NIFTY 500 EMA MARKET BREADTH"
+    )
+
+    if daily_data.empty:
+
+        return {
+            "Program_Run_Date": pd.Timestamp.now().date(),
+            "Latest_Data_Date": pd.NaT,
+            "Earliest_Latest_Data_Date": pd.NaT,
+            "Valid_Stocks": 0,
+            "Above_20D": 0,
+            "Above_20D_Pct": np.nan,
+            "Above_20D_Class": "UNKNOWN",
+            "Above_50D": 0,
+            "Above_50D_Pct": np.nan,
+            "Above_50D_Class": "UNKNOWN",
+            "Above_200D": 0,
+            "Above_200D_Pct": np.nan,
+            "Above_200D_Class": "UNKNOWN",
+            "Pattern": "No market data available.",
+        }
+
+    data = daily_data.copy()
+
+    if not isinstance(
+        data.index,
+        pd.DatetimeIndex,
+    ):
+
+        data.index = pd.to_datetime(
+            data.index
+        )
+
+    data = data.sort_index()
+
+    close_df = get_field(
+        data,
+        "Close",
+    ).copy()
+
+    close_df.index = pd.to_datetime(
+        close_df.index
+    )
+
+    close_df = close_df.sort_index()
+
+    close_df = close_df.apply(
+        pd.to_numeric,
+        errors="coerce",
+    )
+
+    # --------------------------------------------------------
+    # Latest available data date
+    # --------------------------------------------------------
+
+    available_counts = (
+        close_df.notna()
+        .sum(axis=1)
+    )
+
+    available_counts = (
+        available_counts[
+            available_counts > 0
+        ]
+    )
+
+    if available_counts.empty:
+
+        return {
+            "Program_Run_Date": pd.Timestamp.now().date(),
+            "Latest_Data_Date": pd.NaT,
+            "Earliest_Latest_Data_Date": pd.NaT,
+            "Valid_Stocks": 0,
+            "Above_20D": 0,
+            "Above_20D_Pct": np.nan,
+            "Above_20D_Class": "UNKNOWN",
+            "Above_50D": 0,
+            "Above_50D_Pct": np.nan,
+            "Above_50D_Class": "UNKNOWN",
+            "Above_200D": 0,
+            "Above_200D_Pct": np.nan,
+            "Above_200D_Class": "UNKNOWN",
+            "Pattern": "No valid closing-price data available.",
+        }
+
+    latest_date = (
+        available_counts.index.max()
+    )
+
+    # --------------------------------------------------------
+    # Latest available data by date
+    # --------------------------------------------------------
+
+    latest_counts = (
+        available_counts[
+            available_counts.index
+            >= latest_date
+        ]
+    )
+
+    print(
+        f"Program run date: "
+        f"{pd.Timestamp.now().date()}"
+    )
+
+    print(
+        f"Latest available market-data date: "
+        f"{latest_date.date()}"
+    )
+
+    # Earliest date among stocks having latest data.
+    # This is normally the same as latest_date for a
+    # synchronized Nifty 500 dataset.
+    latest_stock_dates = []
+
+    for symbol in close_df.columns:
+
+        series = close_df[symbol].dropna()
+
+        if not series.empty:
+
+            latest_stock_dates.append(
+                series.index.max()
+            )
+
+    earliest_latest_data_date = (
+        min(latest_stock_dates)
+        if latest_stock_dates
+        else pd.NaT
+    )
+
+    print(
+        f"Earliest latest-data date: "
+        f"{earliest_latest_data_date.date()}"
+        if not pd.isna(
+            earliest_latest_data_date
+        )
+        else
+        "Earliest latest-data date: N/A"
+    )
+
+    print()
+
+    print(
+        "Latest available data by date:"
+    )
+
+    # Show latest date count.
+    print(
+        f"{latest_date.date()}: "
+        f"{int(available_counts.loc[latest_date]):,} stocks"
+    )
+
+    # --------------------------------------------------------
+    # Calculate EMA
+    # --------------------------------------------------------
+
+    ema20 = (
+        close_df
+        .ewm(
+            span=20,
+            adjust=False,
+            min_periods=20,
+        )
+        .mean()
+    )
+
+    ema50 = (
+        close_df
+        .ewm(
+            span=50,
+            adjust=False,
+            min_periods=50,
+        )
+        .mean()
+    )
+
+    ema200 = (
+        close_df
+        .ewm(
+            span=200,
+            adjust=False,
+            min_periods=200,
+        )
+        .mean()
+    )
+
+    # --------------------------------------------------------
+    # Use stocks having data on latest_date
+    # --------------------------------------------------------
+
+    latest_close = close_df.loc[
+        latest_date
+    ]
+
+    latest_ema20 = ema20.loc[
+        latest_date
+    ]
+
+    latest_ema50 = ema50.loc[
+        latest_date
+    ]
+
+    latest_ema200 = ema200.loc[
+        latest_date
+    ]
+
+    valid_20 = (
+        latest_close.notna()
+        & latest_ema20.notna()
+    )
+
+    valid_50 = (
+        latest_close.notna()
+        & latest_ema50.notna()
+    )
+
+    valid_200 = (
+        latest_close.notna()
+        & latest_ema200.notna()
+    )
+
+    # A stock is considered valid for the breadth date
+    # when a close exists on the latest available date.
+    valid_stocks = int(
+        latest_close.notna().sum()
+    )
+
+    # --------------------------------------------------------
+    # Breadth calculations
+    # --------------------------------------------------------
+
+    above_20 = int(
+        (
+            (
+                latest_close
+                > latest_ema20
+            )
+            & valid_20
+        ).sum()
+    )
+
+    above_50 = int(
+        (
+            (
+                latest_close
+                > latest_ema50
+            )
+            & valid_50
+        ).sum()
+    )
+
+    above_200 = int(
+        (
+            (
+                latest_close
+                > latest_ema200
+            )
+            & valid_200
+        ).sum()
+    )
+
+    pct_20 = (
+        above_20
+        / valid_stocks
+        * 100.0
+        if valid_stocks
+        else np.nan
+    )
+
+    pct_50 = (
+        above_50
+        / valid_stocks
+        * 100.0
+        if valid_stocks
+        else np.nan
+    )
+
+    pct_200 = (
+        above_200
+        / valid_stocks
+        * 100.0
+        if valid_stocks
+        else np.nan
+    )
+
+    class_20 = classify_breadth_percentage(
+        pct_20
+    )
+
+    class_50 = classify_breadth_percentage(
+        pct_50
+    )
+
+    class_200 = classify_breadth_percentage(
+        pct_200
+    )
+
+    # --------------------------------------------------------
+    # Pattern
+    # --------------------------------------------------------
+
+    classifications = [
+        class_20,
+        class_50,
+        class_200,
+    ]
+
+    if all(
+        value == "High"
+        for value in classifications
+    ):
+
+        pattern = (
+            "High participation across short-, "
+            "medium-, and long-term trends."
+        )
+
+    elif all(
+        value == "Low"
+        for value in classifications
+    ):
+
+        pattern = (
+            "Low participation across short-, "
+            "medium-, and long-term trends."
+        )
+
+    elif all(
+        value == "Medium"
+        for value in classifications
+    ):
+
+        pattern = (
+            "Medium participation across short-, "
+            "medium-, and long-term trends."
+        )
+
+    else:
+
+        pattern = (
+            "Mixed participation across short-, "
+            "medium-, and long-term trends."
+        )
+
+    # --------------------------------------------------------
+    # Display
+    # --------------------------------------------------------
+
+    print()
+
+    print(
+        f"Breadth date: "
+        f"{latest_date.date()}"
+    )
+
+    print(
+        f"Valid Nifty 500 stocks: "
+        f"{valid_stocks:,}"
+    )
+
+    print(
+        f"Above 20D EMA: "
+        f"{above_20:,} "
+        f"({pct_20:.2f}%) — "
+        f"{class_20}"
+    )
+
+    print(
+        f"Above 50D EMA: "
+        f"{above_50:,} "
+        f"({pct_50:.2f}%) — "
+        f"{class_50}"
+    )
+
+    print(
+        f"Above 200D EMA: "
+        f"{above_200:,} "
+        f"({pct_200:.2f}%) — "
+        f"{class_200}"
+    )
+
+    print(
+        f"Market Breadth Pattern: "
+        f"{pattern}"
+    )
+
+    return {
+        "Program_Run_Date": pd.Timestamp.now().date(),
+        "Latest_Data_Date": latest_date,
+        "Earliest_Latest_Data_Date": earliest_latest_data_date,
+        "Valid_Stocks": valid_stocks,
+        "Above_20D": above_20,
+        "Above_20D_Pct": pct_20,
+        "Above_20D_Class": class_20,
+        "Above_50D": above_50,
+        "Above_50D_Pct": pct_50,
+        "Above_50D_Class": class_50,
+        "Above_200D": above_200,
+        "Above_200D_Pct": pct_200,
+        "Above_200D_Class": class_200,
+        "Pattern": pattern,
+    }
+
+
+# ============================================================
+# FETCH STOCK METADATA
+# ============================================================
+
+def fetch_stock_metadata(
+    symbols: list[str],
+) -> pd.DataFrame:
+
+    """
+    Fetch current Yahoo Finance metadata for requested
+    symbols.
+
+    Output:
+        Symbol
+        Market Cap (In Cr)
+        Sector
+        Industry
+
+    Market cap is converted from rupees to Crores:
+
+        ₹172,500,00,00,000 / 1,00,00,000
+        = ₹172,500 Cr
+
+    Metadata is informational only and does not affect
+    ranking, eligibility, allocation, or signals.
+    """
+
+    columns = [
+        "Symbol",
+        "Market Cap (In Cr)",
+        "Sector",
+        "Industry",
+    ]
+
+    if not symbols:
+
+        return pd.DataFrame(
+            columns=columns
+        )
+
+    if yf is None:
+
+        print()
+
+        print(
+            "WARNING: yfinance is not available."
+        )
+
+        print(
+            "Market Cap, Sector and Industry will be blank."
+        )
+
+        return pd.DataFrame(
+            {
+                "Symbol": [
+                    clean_symbol(symbol)
+                    for symbol in symbols
+                ],
+                "Market Cap (In Cr)": np.nan,
+                "Sector": "",
+                "Industry": "",
+            }
+        )
+
+    print()
+
+    print(
+        "Fetching Market Cap / Sector / Industry metadata "
+        "for Top 30 stocks..."
+    )
+
+    timer = Timer()
+
+    records = []
+
+    for index, symbol in enumerate(
+        symbols,
+        start=1,
+    ):
+
+        symbol = clean_symbol(
+            symbol
+        )
+
+        market_cap_cr = np.nan
+        sector = ""
+        industry = ""
+
+        try:
+
+            ticker = yf.Ticker(
+                symbol
+            )
+
+            info = ticker.info
+
+            market_cap = info.get(
+                "marketCap"
+            )
+
+            if market_cap is not None:
+
+                market_cap_cr = (
+                    float(market_cap)
+                    / 10_000_000.0
+                )
+
+            sector_value = info.get(
+                "sector"
+            )
+
+            industry_value = info.get(
+                "industry"
+            )
+
+            if sector_value is not None:
+
+                sector = str(
+                    sector_value
+                ).strip()
+
+            if industry_value is not None:
+
+                industry = str(
+                    industry_value
+                ).strip()
+
+        except Exception:
+
+            pass
+
+        records.append(
+            {
+                "Symbol": symbol,
+                "Market Cap (In Cr)": market_cap_cr,
+                "Sector": sector,
+                "Industry": industry,
+            }
+        )
+
+        if index % 10 == 0:
+
+            print(
+                f"Metadata processed: "
+                f"{index}/{len(symbols)}"
+            )
+
+    result = pd.DataFrame(
+        records,
+        columns=columns,
+    )
+
+    print(
+        f"Metadata completed in "
+        f"{timer.elapsed():.2f}s"
+    )
+
+    return result
+
+
+# ============================================================
+# ATTACH STOCK METADATA
+# ============================================================
+
+def attach_stock_metadata(
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+
+    if df.empty:
+
+        result = df.copy()
+
+        for column in [
+            "Market Cap (In Cr)",
+            "Sector",
+            "Industry",
+        ]:
+
+            if column not in result.columns:
+
+                result[column] = (
+                    pd.Series(
+                        dtype="object"
+                    )
+                )
+
+        return result
+
+    symbols = (
+        df["Symbol"]
+        .astype(str)
+        .map(clean_symbol)
+        .drop_duplicates()
+        .tolist()
+    )
+
+    metadata = fetch_stock_metadata(
+        symbols
+    )
+
+    result = df.copy()
+
+    result["Symbol"] = (
+        result["Symbol"]
+        .astype(str)
+        .map(clean_symbol)
+    )
+
+    result = result.merge(
+        metadata,
+        on="Symbol",
+        how="left",
+    )
+
+    # --------------------------------------------------------
+    # Arrange:
+    #
+    # Research_Rank
+    # Symbol
+    # Sector
+    # Industry
+    # Close
+    # Market Cap (In Cr)
+    # ...
+    # --------------------------------------------------------
+
+    preferred_order = [
+        "Research_Rank",
+        "Symbol",
+        "Sector",
+        "Industry",
+        "Close",
+        "Market Cap (In Cr)",
+    ]
+
+    remaining = [
+        column
+        for column in result.columns
+        if column not in preferred_order
+    ]
+
+    result = result[
+        [
+            column
+            for column in preferred_order
+            if column in result.columns
+        ]
+        + remaining
+    ]
+
+    return result
 
 
 # ============================================================
@@ -1541,14 +2420,6 @@ def generate_current_signal(
     # ========================================================
     # CAPITAL ALLOCATION
     # ========================================================
-    #
-    # N10 means each position gets 10% of capital.
-    #
-    # ₹100,000 / 10 = ₹10,000.
-    #
-    # If fewer than 10 stocks qualify, the unused capital
-    # remains CASH.
-    # ========================================================
 
     if not top10.empty:
 
@@ -1596,10 +2467,6 @@ def generate_current_signal(
 
     # ========================================================
     # SAFETY CHECK
-    # ========================================================
-    #
-    # Nothing with negative Momentum_9M or Breakout_6M can
-    # appear in Top 30 or Top 10.
     # ========================================================
 
     if not top30.empty:
@@ -1897,7 +2764,8 @@ def generate_orders(
 
     for symbol in sorted(
         current_holdings
-        - target_symbols
+        -
+        target_symbols
     ):
 
         orders.append(
@@ -2047,6 +2915,7 @@ def save_csv_reports(
     completed_months: int,
     latest_date: pd.Timestamp,
     regime_info: dict,
+    breadth_info: dict,
     runtime_seconds: float,
 ) -> None:
 
@@ -2139,6 +3008,39 @@ def save_csv_reports(
                 "Regime": regime_info[
                     "Regime"
                 ],
+                "EMA_Breadth_Date": breadth_info[
+                    "Latest_Data_Date"
+                ],
+                "EMA20_Above_Count": breadth_info[
+                    "Above_20D"
+                ],
+                "EMA20_Above_Pct": breadth_info[
+                    "Above_20D_Pct"
+                ],
+                "EMA20_Breadth_Class": breadth_info[
+                    "Above_20D_Class"
+                ],
+                "EMA50_Above_Count": breadth_info[
+                    "Above_50D"
+                ],
+                "EMA50_Above_Pct": breadth_info[
+                    "Above_50D_Pct"
+                ],
+                "EMA50_Breadth_Class": breadth_info[
+                    "Above_50D_Class"
+                ],
+                "EMA200_Above_Count": breadth_info[
+                    "Above_200D"
+                ],
+                "EMA200_Above_Pct": breadth_info[
+                    "Above_200D_Pct"
+                ],
+                "EMA200_Breadth_Class": breadth_info[
+                    "Above_200D_Class"
+                ],
+                "Market_Breadth_Pattern": breadth_info[
+                    "Pattern"
+                ],
                 "Bear_Overlay_Enabled": (
                     ENABLE_BEAR_OVERLAY
                 ),
@@ -2168,6 +3070,7 @@ def save_excel_report(
     completed_months: int,
     latest_date: pd.Timestamp,
     regime_info: dict,
+    breadth_info: dict,
     runtime_seconds: float,
 ) -> None:
 
@@ -2313,6 +3216,42 @@ def save_excel_report(
                         ],
                     },
                     {
+                        "Metric": "EMA Breadth Date",
+                        "Value": breadth_info[
+                            "Latest_Data_Date"
+                        ],
+                    },
+                    {
+                        "Metric": "Above 20D EMA",
+                        "Value": (
+                            f"{breadth_info['Above_20D']:,} "
+                            f"({breadth_info['Above_20D_Pct']:.2f}%) "
+                            f"— {breadth_info['Above_20D_Class']}"
+                        ),
+                    },
+                    {
+                        "Metric": "Above 50D EMA",
+                        "Value": (
+                            f"{breadth_info['Above_50D']:,} "
+                            f"({breadth_info['Above_50D_Pct']:.2f}%) "
+                            f"— {breadth_info['Above_50D_Class']}"
+                        ),
+                    },
+                    {
+                        "Metric": "Above 200D EMA",
+                        "Value": (
+                            f"{breadth_info['Above_200D']:,} "
+                            f"({breadth_info['Above_200D_Pct']:.2f}%) "
+                            f"— {breadth_info['Above_200D_Class']}"
+                        ),
+                    },
+                    {
+                        "Metric": "Market Breadth Pattern",
+                        "Value": breadth_info[
+                            "Pattern"
+                        ],
+                    },
+                    {
                         "Metric": "Bear Overlay",
                         "Value": (
                             "ENABLED"
@@ -2351,6 +3290,75 @@ def save_excel_report(
             regime_df.to_excel(
                 writer,
                 sheet_name="Regime Monitor",
+                index=False,
+            )
+
+            # ------------------------------------------------
+            # EMA Breadth
+            # ------------------------------------------------
+
+            breadth_df = pd.DataFrame(
+                [
+                    {
+                        "Metric": "Program Run Date",
+                        "Value": breadth_info[
+                            "Program_Run_Date"
+                        ],
+                    },
+                    {
+                        "Metric": "Latest Data Date",
+                        "Value": breadth_info[
+                            "Latest_Data_Date"
+                        ],
+                    },
+                    {
+                        "Metric": "Earliest Latest-Data Date",
+                        "Value": breadth_info[
+                            "Earliest_Latest_Data_Date"
+                        ],
+                    },
+                    {
+                        "Metric": "Valid Nifty 500 Stocks",
+                        "Value": breadth_info[
+                            "Valid_Stocks"
+                        ],
+                    },
+                    {
+                        "Metric": "Above 20D EMA",
+                        "Value": (
+                            f"{breadth_info['Above_20D']:,} "
+                            f"({breadth_info['Above_20D_Pct']:.2f}%) "
+                            f"— {breadth_info['Above_20D_Class']}"
+                        ),
+                    },
+                    {
+                        "Metric": "Above 50D EMA",
+                        "Value": (
+                            f"{breadth_info['Above_50D']:,} "
+                            f"({breadth_info['Above_50D_Pct']:.2f}%) "
+                            f"— {breadth_info['Above_50D_Class']}"
+                        ),
+                    },
+                    {
+                        "Metric": "Above 200D EMA",
+                        "Value": (
+                            f"{breadth_info['Above_200D']:,} "
+                            f"({breadth_info['Above_200D_Pct']:.2f}%) "
+                            f"— {breadth_info['Above_200D_Class']}"
+                        ),
+                    },
+                    {
+                        "Metric": "Market Breadth Pattern",
+                        "Value": breadth_info[
+                            "Pattern"
+                        ],
+                    },
+                ]
+            )
+
+            breadth_df.to_excel(
+                writer,
+                sheet_name="EMA Market Breadth",
                 index=False,
             )
 
@@ -2503,7 +3511,10 @@ def display_signal(
         display_columns = [
             "Research_Rank",
             "Symbol",
+            "Sector",
+            "Industry",
             "Close",
+            "Market Cap (In Cr)",
             "Momentum_9M",
             "Breakout_6M",
             "Volume_Ratio",
@@ -2559,6 +3570,17 @@ def display_signal(
                 .round(2)
             )
 
+        # ----------------------------------------------------
+        # Market Cap Indian formatting
+        # ----------------------------------------------------
+
+        if "Market Cap (In Cr)" in table.columns:
+
+            table["Market Cap (In Cr)"] = (
+                table["Market Cap (In Cr)"]
+                .apply(format_indian_number)
+            )
+
         print(
             table.to_string(
                 index=False
@@ -2590,7 +3612,10 @@ def display_signal(
         portfolio_columns = [
             "Research_Rank",
             "Symbol",
+            "Sector",
+            "Industry",
             "Close",
+            "Market Cap (In Cr)",
             "Momentum_9M",
             "Breakout_6M",
             "Volume_Ratio",
@@ -2633,6 +3658,13 @@ def display_signal(
             portfolio["Close"] = (
                 portfolio["Close"]
                 .round(2)
+            )
+
+        if "Market Cap (In Cr)" in portfolio.columns:
+
+            portfolio["Market Cap (In Cr)"] = (
+                portfolio["Market Cap (In Cr)"]
+                .apply(format_indian_number)
             )
 
         if "Target_Capital" in portfolio.columns:
@@ -2739,6 +3771,8 @@ def display_signal(
 
 def main() -> None:
 
+    program_start_timestamp = pd.Timestamp.now()
+
     program_start = time.perf_counter()
 
     # ========================================================
@@ -2842,11 +3876,23 @@ def main() -> None:
     # ========================================================
     # STEP 3
     #
+    # EMA MARKET BREADTH
+    # ========================================================
+
+    breadth_info = (
+        calculate_ema_market_breadth(
+            daily_data
+        )
+    )
+
+    # ========================================================
+    # STEP 4
+    #
     # MONTHLY DATA
     # ========================================================
 
     print_subheader(
-        "STEP 3 — MONTHLY DATA"
+        "STEP 4 — MONTHLY DATA"
     )
 
     monthly = (
@@ -2878,7 +3924,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 4
+    # STEP 5
     #
     # FEATURES
     # ========================================================
@@ -2890,7 +3936,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 5
+    # STEP 6
     #
     # CURRENT SIGNAL
     # ========================================================
@@ -2905,7 +3951,70 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 6
+    # STEP 7
+    #
+    # STOCK METADATA
+    # ========================================================
+
+    # Metadata is attached after ranking so only the
+    # Top 30 research candidates require Yahoo metadata
+    # lookups. It has NO effect on strategy calculations.
+    top30 = attach_stock_metadata(
+        top30
+    )
+
+    # Top 10 is taken from the already ranked Top 30.
+    # Merge metadata from Top 30 instead of making another
+    # set of Yahoo requests.
+    metadata_columns = [
+        "Symbol",
+        "Market Cap (In Cr)",
+        "Sector",
+        "Industry",
+    ]
+
+    metadata_lookup = top30[
+        [
+            column
+            for column in metadata_columns
+            if column in top30.columns
+        ]
+    ].drop_duplicates(
+        subset=["Symbol"]
+    )
+
+    top10 = top10.merge(
+        metadata_lookup,
+        on="Symbol",
+        how="left",
+    )
+
+    preferred_top10_order = [
+        "Research_Rank",
+        "Symbol",
+        "Sector",
+        "Industry",
+        "Close",
+        "Market Cap (In Cr)",
+    ]
+
+    remaining_top10 = [
+        column
+        for column in top10.columns
+        if column not in preferred_top10_order
+    ]
+
+    top10 = top10[
+        [
+            column
+            for column in preferred_top10_order
+            if column in top10.columns
+        ]
+        + remaining_top10
+    ]
+
+    # ========================================================
+    # STEP 8
     #
     # REGIME MONITOR
     # ========================================================
@@ -2968,7 +4077,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 7
+    # STEP 9
     #
     # CURRENT HOLDINGS
     # ========================================================
@@ -2987,7 +4096,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 8
+    # STEP 10
     #
     # ORDER GENERATION
     # ========================================================
@@ -2998,10 +4107,12 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 9
+    # STEP 11
     #
     # FINAL RUNTIME
     # ========================================================
+
+    program_end_timestamp = pd.Timestamp.now()
 
     program_end = time.perf_counter()
 
@@ -3011,7 +4122,7 @@ def main() -> None:
     )
 
     # ========================================================
-    # STEP 10
+    # STEP 12
     #
     # SAVE CSV REPORTS
     # ========================================================
@@ -3027,11 +4138,12 @@ def main() -> None:
         completed_months=completed_months,
         latest_date=latest_date,
         regime_info=regime_info,
+        breadth_info=breadth_info,
         runtime_seconds=runtime_seconds,
     )
 
     # ========================================================
-    # STEP 11
+    # STEP 13
     #
     # SAVE EXCEL
     # ========================================================
@@ -3047,11 +4159,12 @@ def main() -> None:
         completed_months=completed_months,
         latest_date=latest_date,
         regime_info=regime_info,
+        breadth_info=breadth_info,
         runtime_seconds=runtime_seconds,
     )
 
     # ========================================================
-    # STEP 12
+    # STEP 14
     #
     # DISPLAY
     # ========================================================
@@ -3067,6 +4180,122 @@ def main() -> None:
         completed_months=completed_months,
         latest_date=latest_date,
         regime_info=regime_info,
+    )
+
+    # ========================================================
+    # EMA MARKET BREADTH SUMMARY
+    # ========================================================
+
+    print()
+
+    print(
+        "=" * 80
+    )
+
+    print(
+        "EMA MARKET BREADTH SUMMARY"
+    )
+
+    print(
+        "=" * 80
+    )
+
+    print(
+        f"Breadth date        : "
+        f"{breadth_info['Latest_Data_Date'].date()}"
+    )
+
+    print(
+        f"Valid Nifty 500     : "
+        f"{breadth_info['Valid_Stocks']:,}"
+    )
+
+    print(
+        f"Above 20D EMA       : "
+        f"{breadth_info['Above_20D']:,} "
+        f"({breadth_info['Above_20D_Pct']:.2f}%) "
+        f"— {breadth_info['Above_20D_Class']}"
+    )
+
+    print(
+        f"Above 50D EMA       : "
+        f"{breadth_info['Above_50D']:,} "
+        f"({breadth_info['Above_50D_Pct']:.2f}%) "
+        f"— {breadth_info['Above_50D_Class']}"
+    )
+
+    print(
+        f"Above 200D EMA      : "
+        f"{breadth_info['Above_200D']:,} "
+        f"({breadth_info['Above_200D_Pct']:.2f}%) "
+        f"— {breadth_info['Above_200D_Class']}"
+    )
+
+    print(
+        f"Market Breadth      : "
+        f"{breadth_info['Pattern']}"
+    )
+
+    # ========================================================
+    # PROGRAM RUNTIME
+    # ========================================================
+
+    print()
+
+    print(
+        "=" * 80
+    )
+
+    print(
+        "PROGRAM RUNTIME"
+    )
+
+    print(
+        "=" * 80
+    )
+
+    elapsed_hours = int(
+        runtime_seconds
+        // 3600
+    )
+
+    elapsed_minutes = int(
+        (
+            runtime_seconds
+            % 3600
+        )
+        // 60
+    )
+
+    elapsed_seconds = (
+        runtime_seconds
+        % 60
+    )
+
+    total_runtime_formatted = (
+        f"{elapsed_hours:02d}:"
+        f"{elapsed_minutes:02d}:"
+        f"{elapsed_seconds:05.2f}"
+    )
+
+    print(
+        f"Start timestamp : "
+        f"{program_start_timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+    print(
+        f"End timestamp   : "
+        f"{program_end_timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+
+    print(
+        f"Elapsed seconds : "
+        f"{runtime_seconds:.2f}"
+    )
+
+    print(
+        f"Total runtime   : "
+        f"{total_runtime_formatted}"
     )
 
     # ========================================================
@@ -3154,6 +4383,43 @@ def main() -> None:
     print()
 
     print(
+        "EMA MARKET BREADTH:"
+    )
+
+    print(
+        f"  Breadth date          : "
+        f"{breadth_info['Latest_Data_Date'].date()}"
+    )
+
+    print(
+        f"  Above 20D EMA         : "
+        f"{breadth_info['Above_20D']:,} "
+        f"({breadth_info['Above_20D_Pct']:.2f}%) "
+        f"— {breadth_info['Above_20D_Class']}"
+    )
+
+    print(
+        f"  Above 50D EMA         : "
+        f"{breadth_info['Above_50D']:,} "
+        f"({breadth_info['Above_50D_Pct']:.2f}%) "
+        f"— {breadth_info['Above_50D_Class']}"
+    )
+
+    print(
+        f"  Above 200D EMA        : "
+        f"{breadth_info['Above_200D']:,} "
+        f"({breadth_info['Above_200D_Pct']:.2f}%) "
+        f"— {breadth_info['Above_200D_Class']}"
+    )
+
+    print(
+        f"  Pattern               : "
+        f"{breadth_info['Pattern']}"
+    )
+
+    print()
+
+    print(
         f"Total runtime         : "
         f"{runtime_seconds:.2f}s"
     )
@@ -3200,6 +4466,19 @@ def main() -> None:
         "backtested before treating the modified strategy "
         "as statistically validated."
     )
+
+    print()
+
+    print(
+        "Metadata columns are informational only:"
+    )
+
+    print(
+        "Market Cap (In Cr), Sector and Industry "
+        "do not affect eligibility, ranking or portfolio allocation."
+    )
+
+    print()
 
     print(
         "=" * 100
