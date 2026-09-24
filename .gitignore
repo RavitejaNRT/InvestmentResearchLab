@@ -4,9 +4,14 @@ __pycache__/
 .env
 universe.py
 results/
+!src/ETF5PercentLab/results/
+!src/ETF5PercentLab/results/**
 # ============================================================
 # MonthlyMomentumLab generated files
 # ============================================================
 
 src/MonthlyMomentumLab/cache/
 src/MonthlyMomentumLab/results/
+
+# Generated cache files
+*.pkl

@@ -1,0 +1,5175 @@
+{
+  "metadata": {
+    "version": "ETF5PercentLab-final-research-v1",
+    "generated_at": "2026-09-24T17:18:42.335972+05:30",
+    "research_cutoff": "2026-09-24T00:00:00",
+    "signal_definition": "Day D completed close",
+    "entry_definition": "Day D+1 open",
+    "target_definition": "Day D+1 open * 1.05",
+    "target_pct": 0.05,
+    "stop_definition": "NONE",
+    "horizon_days": 20,
+    "speed_definition": "Trading days from D+1 through first High >= target",
+    "train_test_split_date": "2023-09-05T00:00:00",
+    "rule_selection": "Candidates discovered on TRAIN only; selected TRAIN rules then validated on later OOS data.",
+    "production_hierarchy": [
+      "ETF-specific OOS-validated rule",
+      "Global OOS-validated rule",
+      "Nearest same-ETF historical analog fallback",
+      "ETF historical baseline fallback if analog history is insufficient"
+    ],
+    "multiple_testing_warning": "Many candidate rules are searched. OOS validation reduces but does not eliminate data-mining/selection bias."
+  },
+  "universe": {
+    "AUTOBEES": {
+      "category": "Indian Sector - Auto",
+      "symbol": "AUTOBEES.NS"
+    },
+    "BANKBEES": {
+      "category": "Indian Sector - Banks",
+      "symbol": "BANKBEES.NS"
+    },
+    "CPSEETF": {
+      "category": "Indian Sector - CPSE",
+      "symbol": "CPSEETF.NS"
+    },
+    "FMCGIETF": {
+      "category": "Indian Sector - FMCG",
+      "symbol": "FMCGIETF.NS"
+    },
+    "GOLDBEES": {
+      "category": "Commodity - Gold",
+      "symbol": "GOLDBEES.NS"
+    },
+    "HNGSNGBEES": {
+      "category": "International - Hang Seng",
+      "symbol": "HNGSNGBEES.NS"
+    },
+    "ITBEES": {
+      "category": "Indian Sector - IT",
+      "symbol": "ITBEES.NS"
+    },
+    "MAFANG": {
+      "category": "International - FANG+",
+      "symbol": "MAFANG.NS"
+    },
+    "METALIETF": {
+      "category": "Indian Sector - Metal",
+      "symbol": "METALIETF.NS"
+    },
+    "MON100": {
+      "category": "International - NASDAQ 100",
+      "symbol": "MON100.NS"
+    },
+    "NIFTYBEES": {
+      "category": "Indian Broad Market - Nifty 50",
+      "symbol": "NIFTYBEES.NS"
+    },
+    "OILIETF": {
+      "category": "Indian Sector - Oil & Gas",
+      "symbol": "OILIETF.NS"
+    },
+    "PHARMABEES": {
+      "category": "Indian Sector - Pharma",
+      "symbol": "PHARMABEES.NS"
+    },
+    "PSUBNKBEES": {
+      "category": "Indian Sector - PSU Banks",
+      "symbol": "PSUBNKBEES.NS"
+    },
+    "PVTBANIETF": {
+      "category": "Indian Sector - Private Banks",
+      "symbol": "PVTBANIETF.NS"
+    },
+    "SILVERBEES": {
+      "category": "Commodity - Silver",
+      "symbol": "SILVERBEES.NS"
+    }
+  },
+  "feature_weights": {
+    "RET_5": 1.0,
+    "RET_10": 1.0,
+    "RET_20": 1.1,
+    "RET_40": 1.0,
+    "RET_60": 1.0,
+    "RET_120": 0.8,
+    "RET_252": 0.8,
+    "RS_20": 1.0,
+    "RS_40": 1.0,
+    "RS_60": 1.0,
+    "RS_120": 0.8,
+    "DIST_SMA20": 1.0,
+    "DIST_SMA50": 1.0,
+    "DIST_SMA100": 0.8,
+    "DIST_SMA200": 0.8,
+    "DIST_HIGH_20": 0.9,
+    "DIST_HIGH_50": 0.9,
+    "DIST_HIGH_100": 0.8,
+    "DIST_HIGH_252": 0.8,
+    "BREAKOUT_20": 0.9,
+    "BREAKOUT_50": 0.9,
+    "RSI14": 0.7,
+    "VOLUME_RATIO_20": 0.6
+  },
+  "condition_definitions": [
+    {
+      "id": 0,
+      "feature": "RET_5",
+      "op": "lt",
+      "v1": -0.05,
+      "v2": null,
+      "label": "RET_5 < -5%",
+      "group": "RET_5"
+    },
+    {
+      "id": 1,
+      "feature": "RET_5",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "RET_5 -5% to 0%",
+      "group": "RET_5"
+    },
+    {
+      "id": 2,
+      "feature": "RET_5",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.05,
+      "label": "RET_5 0% to 5%",
+      "group": "RET_5"
+    },
+    {
+      "id": 3,
+      "feature": "RET_5",
+      "op": "ge",
+      "v1": 0.05,
+      "v2": null,
+      "label": "RET_5 >= 5%",
+      "group": "RET_5"
+    },
+    {
+      "id": 4,
+      "feature": "RET_10",
+      "op": "lt",
+      "v1": 0.0,
+      "v2": null,
+      "label": "RET_10 < 0%",
+      "group": "RET_10"
+    },
+    {
+      "id": 5,
+      "feature": "RET_10",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.05,
+      "label": "RET_10 0% to 5%",
+      "group": "RET_10"
+    },
+    {
+      "id": 6,
+      "feature": "RET_10",
+      "op": "ge",
+      "v1": 0.05,
+      "v2": null,
+      "label": "RET_10 >= 5%",
+      "group": "RET_10"
+    },
+    {
+      "id": 7,
+      "feature": "RET_20",
+      "op": "lt",
+      "v1": 0.0,
+      "v2": null,
+      "label": "RET_20 < 0%",
+      "group": "RET_20"
+    },
+    {
+      "id": 8,
+      "feature": "RET_20",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.1,
+      "label": "RET_20 0% to 10%",
+      "group": "RET_20"
+    },
+    {
+      "id": 9,
+      "feature": "RET_20",
+      "op": "ge",
+      "v1": 0.1,
+      "v2": null,
+      "label": "RET_20 >= 10%",
+      "group": "RET_20"
+    },
+    {
+      "id": 10,
+      "feature": "RET_40",
+      "op": "lt",
+      "v1": 0.0,
+      "v2": null,
+      "label": "RET_40 < 0%",
+      "group": "RET_40"
+    },
+    {
+      "id": 11,
+      "feature": "RET_40",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.1,
+      "label": "RET_40 0% to 10%",
+      "group": "RET_40"
+    },
+    {
+      "id": 12,
+      "feature": "RET_40",
+      "op": "ge",
+      "v1": 0.1,
+      "v2": null,
+      "label": "RET_40 >= 10%",
+      "group": "RET_40"
+    },
+    {
+      "id": 13,
+      "feature": "RET_60",
+      "op": "lt",
+      "v1": 0.0,
+      "v2": null,
+      "label": "RET_60 < 0%",
+      "group": "RET_60"
+    },
+    {
+      "id": 14,
+      "feature": "RET_60",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.1,
+      "label": "RET_60 0% to 10%",
+      "group": "RET_60"
+    },
+    {
+      "id": 15,
+      "feature": "RET_60",
+      "op": "ge",
+      "v1": 0.1,
+      "v2": null,
+      "label": "RET_60 >= 10%",
+      "group": "RET_60"
+    },
+    {
+      "id": 16,
+      "feature": "RET_120",
+      "op": "lt",
+      "v1": 0.0,
+      "v2": null,
+      "label": "RET_120 < 0%",
+      "group": "RET_120"
+    },
+    {
+      "id": 17,
+      "feature": "RET_120",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.2,
+      "label": "RET_120 0% to 20%",
+      "group": "RET_120"
+    },
+    {
+      "id": 18,
+      "feature": "RET_120",
+      "op": "ge",
+      "v1": 0.2,
+      "v2": null,
+      "label": "RET_120 >= 20%",
+      "group": "RET_120"
+    },
+    {
+      "id": 19,
+      "feature": "RET_252",
+      "op": "lt",
+      "v1": 0.0,
+      "v2": null,
+      "label": "RET_252 < 0%",
+      "group": "RET_252"
+    },
+    {
+      "id": 20,
+      "feature": "RET_252",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.2,
+      "label": "RET_252 0% to 20%",
+      "group": "RET_252"
+    },
+    {
+      "id": 21,
+      "feature": "RET_252",
+      "op": "ge",
+      "v1": 0.2,
+      "v2": null,
+      "label": "RET_252 >= 20%",
+      "group": "RET_252"
+    },
+    {
+      "id": 22,
+      "feature": "RS_20",
+      "op": "lt",
+      "v1": 0.0,
+      "v2": null,
+      "label": "RS_20 < 0%",
+      "group": "RS_20"
+    },
+    {
+      "id": 23,
+      "feature": "RS_20",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.05,
+      "label": "RS_20 0% to 5%",
+      "group": "RS_20"
+    },
+    {
+      "id": 24,
+      "feature": "RS_20",
+      "op": "ge",
+      "v1": 0.05,
+      "v2": null,
+      "label": "RS_20 >= 5%",
+      "group": "RS_20"
+    },
+    {
+      "id": 25,
+      "feature": "RS_40",
+      "op": "lt",
+      "v1": 0.0,
+      "v2": null,
+      "label": "RS_40 < 0%",
+      "group": "RS_40"
+    },
+    {
+      "id": 26,
+      "feature": "RS_40",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.05,
+      "label": "RS_40 0% to 5%",
+      "group": "RS_40"
+    },
+    {
+      "id": 27,
+      "feature": "RS_40",
+      "op": "ge",
+      "v1": 0.05,
+      "v2": null,
+      "label": "RS_40 >= 5%",
+      "group": "RS_40"
+    },
+    {
+      "id": 28,
+      "feature": "RS_60",
+      "op": "lt",
+      "v1": 0.0,
+      "v2": null,
+      "label": "RS_60 < 0%",
+      "group": "RS_60"
+    },
+    {
+      "id": 29,
+      "feature": "RS_60",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.05,
+      "label": "RS_60 0% to 5%",
+      "group": "RS_60"
+    },
+    {
+      "id": 30,
+      "feature": "RS_60",
+      "op": "ge",
+      "v1": 0.05,
+      "v2": null,
+      "label": "RS_60 >= 5%",
+      "group": "RS_60"
+    },
+    {
+      "id": 31,
+      "feature": "RS_120",
+      "op": "lt",
+      "v1": 0.0,
+      "v2": null,
+      "label": "RS_120 < 0%",
+      "group": "RS_120"
+    },
+    {
+      "id": 32,
+      "feature": "RS_120",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.05,
+      "label": "RS_120 0% to 5%",
+      "group": "RS_120"
+    },
+    {
+      "id": 33,
+      "feature": "RS_120",
+      "op": "ge",
+      "v1": 0.05,
+      "v2": null,
+      "label": "RS_120 >= 5%",
+      "group": "RS_120"
+    },
+    {
+      "id": 34,
+      "feature": "DIST_SMA20",
+      "op": "lt",
+      "v1": -0.05,
+      "v2": null,
+      "label": "DIST_SMA20 < -5%",
+      "group": "DIST_SMA20"
+    },
+    {
+      "id": 35,
+      "feature": "DIST_SMA20",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "DIST_SMA20 -5% to 0%",
+      "group": "DIST_SMA20"
+    },
+    {
+      "id": 36,
+      "feature": "DIST_SMA20",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.05,
+      "label": "DIST_SMA20 0% to 5%",
+      "group": "DIST_SMA20"
+    },
+    {
+      "id": 37,
+      "feature": "DIST_SMA20",
+      "op": "ge",
+      "v1": 0.05,
+      "v2": null,
+      "label": "DIST_SMA20 >= 5%",
+      "group": "DIST_SMA20"
+    },
+    {
+      "id": 38,
+      "feature": "DIST_SMA50",
+      "op": "lt",
+      "v1": -0.05,
+      "v2": null,
+      "label": "DIST_SMA50 < -5%",
+      "group": "DIST_SMA50"
+    },
+    {
+      "id": 39,
+      "feature": "DIST_SMA50",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "DIST_SMA50 -5% to 0%",
+      "group": "DIST_SMA50"
+    },
+    {
+      "id": 40,
+      "feature": "DIST_SMA50",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.05,
+      "label": "DIST_SMA50 0% to 5%",
+      "group": "DIST_SMA50"
+    },
+    {
+      "id": 41,
+      "feature": "DIST_SMA50",
+      "op": "ge",
+      "v1": 0.05,
+      "v2": null,
+      "label": "DIST_SMA50 >= 5%",
+      "group": "DIST_SMA50"
+    },
+    {
+      "id": 42,
+      "feature": "DIST_SMA100",
+      "op": "lt",
+      "v1": -0.05,
+      "v2": null,
+      "label": "DIST_SMA100 < -5%",
+      "group": "DIST_SMA100"
+    },
+    {
+      "id": 43,
+      "feature": "DIST_SMA100",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "DIST_SMA100 -5% to 0%",
+      "group": "DIST_SMA100"
+    },
+    {
+      "id": 44,
+      "feature": "DIST_SMA100",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.05,
+      "label": "DIST_SMA100 0% to 5%",
+      "group": "DIST_SMA100"
+    },
+    {
+      "id": 45,
+      "feature": "DIST_SMA100",
+      "op": "ge",
+      "v1": 0.05,
+      "v2": null,
+      "label": "DIST_SMA100 >= 5%",
+      "group": "DIST_SMA100"
+    },
+    {
+      "id": 46,
+      "feature": "DIST_SMA200",
+      "op": "lt",
+      "v1": -0.05,
+      "v2": null,
+      "label": "DIST_SMA200 < -5%",
+      "group": "DIST_SMA200"
+    },
+    {
+      "id": 47,
+      "feature": "DIST_SMA200",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "DIST_SMA200 -5% to 0%",
+      "group": "DIST_SMA200"
+    },
+    {
+      "id": 48,
+      "feature": "DIST_SMA200",
+      "op": "range",
+      "v1": 0.0,
+      "v2": 0.05,
+      "label": "DIST_SMA200 0% to 5%",
+      "group": "DIST_SMA200"
+    },
+    {
+      "id": 49,
+      "feature": "DIST_SMA200",
+      "op": "ge",
+      "v1": 0.05,
+      "v2": null,
+      "label": "DIST_SMA200 >= 5%",
+      "group": "DIST_SMA200"
+    },
+    {
+      "id": 50,
+      "feature": "DIST_HIGH_20",
+      "op": "lt",
+      "v1": -0.1,
+      "v2": null,
+      "label": "DIST_HIGH_20 < -10%",
+      "group": "DIST_HIGH_20"
+    },
+    {
+      "id": 51,
+      "feature": "DIST_HIGH_20",
+      "op": "range",
+      "v1": -0.1,
+      "v2": -0.05,
+      "label": "DIST_HIGH_20 -10% to -5%",
+      "group": "DIST_HIGH_20"
+    },
+    {
+      "id": 52,
+      "feature": "DIST_HIGH_20",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "DIST_HIGH_20 -5% to 0%",
+      "group": "DIST_HIGH_20"
+    },
+    {
+      "id": 53,
+      "feature": "DIST_HIGH_20",
+      "op": "ge",
+      "v1": 0.0,
+      "v2": null,
+      "label": "DIST_HIGH_20 >= 0%",
+      "group": "DIST_HIGH_20"
+    },
+    {
+      "id": 54,
+      "feature": "DIST_HIGH_50",
+      "op": "lt",
+      "v1": -0.1,
+      "v2": null,
+      "label": "DIST_HIGH_50 < -10%",
+      "group": "DIST_HIGH_50"
+    },
+    {
+      "id": 55,
+      "feature": "DIST_HIGH_50",
+      "op": "range",
+      "v1": -0.1,
+      "v2": -0.05,
+      "label": "DIST_HIGH_50 -10% to -5%",
+      "group": "DIST_HIGH_50"
+    },
+    {
+      "id": 56,
+      "feature": "DIST_HIGH_50",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "DIST_HIGH_50 -5% to 0%",
+      "group": "DIST_HIGH_50"
+    },
+    {
+      "id": 57,
+      "feature": "DIST_HIGH_50",
+      "op": "ge",
+      "v1": 0.0,
+      "v2": null,
+      "label": "DIST_HIGH_50 >= 0%",
+      "group": "DIST_HIGH_50"
+    },
+    {
+      "id": 58,
+      "feature": "DIST_HIGH_100",
+      "op": "lt",
+      "v1": -0.1,
+      "v2": null,
+      "label": "DIST_HIGH_100 < -10%",
+      "group": "DIST_HIGH_100"
+    },
+    {
+      "id": 59,
+      "feature": "DIST_HIGH_100",
+      "op": "range",
+      "v1": -0.1,
+      "v2": -0.05,
+      "label": "DIST_HIGH_100 -10% to -5%",
+      "group": "DIST_HIGH_100"
+    },
+    {
+      "id": 60,
+      "feature": "DIST_HIGH_100",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "DIST_HIGH_100 -5% to 0%",
+      "group": "DIST_HIGH_100"
+    },
+    {
+      "id": 61,
+      "feature": "DIST_HIGH_100",
+      "op": "ge",
+      "v1": 0.0,
+      "v2": null,
+      "label": "DIST_HIGH_100 >= 0%",
+      "group": "DIST_HIGH_100"
+    },
+    {
+      "id": 62,
+      "feature": "DIST_HIGH_252",
+      "op": "lt",
+      "v1": -0.1,
+      "v2": null,
+      "label": "DIST_HIGH_252 < -10%",
+      "group": "DIST_HIGH_252"
+    },
+    {
+      "id": 63,
+      "feature": "DIST_HIGH_252",
+      "op": "range",
+      "v1": -0.1,
+      "v2": -0.05,
+      "label": "DIST_HIGH_252 -10% to -5%",
+      "group": "DIST_HIGH_252"
+    },
+    {
+      "id": 64,
+      "feature": "DIST_HIGH_252",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "DIST_HIGH_252 -5% to 0%",
+      "group": "DIST_HIGH_252"
+    },
+    {
+      "id": 65,
+      "feature": "DIST_HIGH_252",
+      "op": "ge",
+      "v1": 0.0,
+      "v2": null,
+      "label": "DIST_HIGH_252 >= 0%",
+      "group": "DIST_HIGH_252"
+    },
+    {
+      "id": 66,
+      "feature": "BREAKOUT_20",
+      "op": "lt",
+      "v1": -0.05,
+      "v2": null,
+      "label": "BREAKOUT_20 < -5%",
+      "group": "BREAKOUT_20"
+    },
+    {
+      "id": 67,
+      "feature": "BREAKOUT_20",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "BREAKOUT_20 -5% to 0%",
+      "group": "BREAKOUT_20"
+    },
+    {
+      "id": 68,
+      "feature": "BREAKOUT_20",
+      "op": "ge",
+      "v1": 0.0,
+      "v2": null,
+      "label": "BREAKOUT_20 >= 0%",
+      "group": "BREAKOUT_20"
+    },
+    {
+      "id": 69,
+      "feature": "BREAKOUT_50",
+      "op": "lt",
+      "v1": -0.05,
+      "v2": null,
+      "label": "BREAKOUT_50 < -5%",
+      "group": "BREAKOUT_50"
+    },
+    {
+      "id": 70,
+      "feature": "BREAKOUT_50",
+      "op": "range",
+      "v1": -0.05,
+      "v2": 0.0,
+      "label": "BREAKOUT_50 -5% to 0%",
+      "group": "BREAKOUT_50"
+    },
+    {
+      "id": 71,
+      "feature": "BREAKOUT_50",
+      "op": "ge",
+      "v1": 0.0,
+      "v2": null,
+      "label": "BREAKOUT_50 >= 0%",
+      "group": "BREAKOUT_50"
+    },
+    {
+      "id": 72,
+      "feature": "RSI14",
+      "op": "lt",
+      "v1": 35.0,
+      "v2": null,
+      "label": "RSI14 < 3500%",
+      "group": "RSI14"
+    },
+    {
+      "id": 73,
+      "feature": "RSI14",
+      "op": "range",
+      "v1": 35.0,
+      "v2": 50.0,
+      "label": "RSI14 3500% to 5000%",
+      "group": "RSI14"
+    },
+    {
+      "id": 74,
+      "feature": "RSI14",
+      "op": "range",
+      "v1": 50.0,
+      "v2": 65.0,
+      "label": "RSI14 5000% to 6500%",
+      "group": "RSI14"
+    },
+    {
+      "id": 75,
+      "feature": "RSI14",
+      "op": "ge",
+      "v1": 65.0,
+      "v2": null,
+      "label": "RSI14 >= 6500%",
+      "group": "RSI14"
+    },
+    {
+      "id": 76,
+      "feature": "VOLUME_RATIO_20",
+      "op": "lt",
+      "v1": 0.75,
+      "v2": null,
+      "label": "VOLUME_RATIO_20 < 75%",
+      "group": "VOLUME_RATIO_20"
+    },
+    {
+      "id": 77,
+      "feature": "VOLUME_RATIO_20",
+      "op": "range",
+      "v1": 0.75,
+      "v2": 1.0,
+      "label": "VOLUME_RATIO_20 75% to 100%",
+      "group": "VOLUME_RATIO_20"
+    },
+    {
+      "id": 78,
+      "feature": "VOLUME_RATIO_20",
+      "op": "range",
+      "v1": 1.0,
+      "v2": 1.25,
+      "label": "VOLUME_RATIO_20 100% to 125%",
+      "group": "VOLUME_RATIO_20"
+    },
+    {
+      "id": 79,
+      "feature": "VOLUME_RATIO_20",
+      "op": "ge",
+      "v1": 1.25,
+      "v2": null,
+      "label": "VOLUME_RATIO_20 >= 125%",
+      "group": "VOLUME_RATIO_20"
+    }
+  ],
+  "global_oos_rules": [
+    {
+      "condition_indices": [
+        7,
+        27,
+        50
+      ],
+      "rule": "RET_20 < 0% AND RS_40 >= 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 71,
+      "train_hits": 56,
+      "train_hit_rate": 0.7887323943661971,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 9.098591549295774,
+      "train_etf_coverage": 6,
+      "test_observations": 64,
+      "test_hits": 53,
+      "test_hit_rate": 0.828125,
+      "test_median_days": 4.0,
+      "test_expected_days_20": 8.703125,
+      "test_etf_coverage": 9,
+      "conditions": [
+        {
+          "id": 7,
+          "feature": "RET_20",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_20 < 0%",
+          "group": "RET_20"
+        },
+        {
+          "id": 27,
+          "feature": "RS_40",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RS_40 >= 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        17,
+        27,
+        50
+      ],
+      "rule": "RET_120 0% to 20% AND RS_40 >= 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 41,
+      "train_hits": 35,
+      "train_hit_rate": 0.8536585365853658,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 8.878048780487806,
+      "train_etf_coverage": 5,
+      "test_observations": 28,
+      "test_hits": 23,
+      "test_hit_rate": 0.8214285714285714,
+      "test_median_days": 6.0,
+      "test_expected_days_20": 8.928571428571429,
+      "test_etf_coverage": 6,
+      "conditions": [
+        {
+          "id": 17,
+          "feature": "RET_120",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.2,
+          "label": "RET_120 0% to 20%",
+          "group": "RET_120"
+        },
+        {
+          "id": 27,
+          "feature": "RS_40",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RS_40 >= 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        0,
+        33,
+        72
+      ],
+      "rule": "RET_5 < -5% AND RS_120 >= 5% AND RSI14 < 3500%",
+      "train_observations": 49,
+      "train_hits": 36,
+      "train_hit_rate": 0.7346938775510204,
+      "train_median_days": 4.5,
+      "train_expected_days_20": 9.183673469387756,
+      "train_etf_coverage": 7,
+      "test_observations": 54,
+      "test_hits": 37,
+      "test_hit_rate": 0.6851851851851852,
+      "test_median_days": 4.0,
+      "test_expected_days_20": 9.537037037037036,
+      "test_etf_coverage": 10,
+      "conditions": [
+        {
+          "id": 0,
+          "feature": "RET_5",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "RET_5 < -5%",
+          "group": "RET_5"
+        },
+        {
+          "id": 33,
+          "feature": "RS_120",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RS_120 >= 5%",
+          "group": "RS_120"
+        },
+        {
+          "id": 72,
+          "feature": "RSI14",
+          "op": "lt",
+          "v1": 35.0,
+          "v2": null,
+          "label": "RSI14 < 3500%",
+          "group": "RSI14"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        13,
+        26,
+        50
+      ],
+      "rule": "RET_60 < 0% AND RS_40 0% to 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 59,
+      "train_hits": 45,
+      "train_hit_rate": 0.7627118644067796,
+      "train_median_days": 3.0,
+      "train_expected_days_20": 9.067796610169491,
+      "train_etf_coverage": 7,
+      "test_observations": 33,
+      "test_hits": 29,
+      "test_hit_rate": 0.8787878787878788,
+      "test_median_days": 8.0,
+      "test_expected_days_20": 9.757575757575758,
+      "test_etf_coverage": 9,
+      "conditions": [
+        {
+          "id": 13,
+          "feature": "RET_60",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_60 < 0%",
+          "group": "RET_60"
+        },
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        17,
+        30,
+        50
+      ],
+      "rule": "RET_120 0% to 20% AND RS_60 >= 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 43,
+      "train_hits": 35,
+      "train_hit_rate": 0.813953488372093,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 8.627906976744185,
+      "train_etf_coverage": 6,
+      "test_observations": 65,
+      "test_hits": 52,
+      "test_hit_rate": 0.8,
+      "test_median_days": 7.0,
+      "test_expected_days_20": 10.4,
+      "test_etf_coverage": 7,
+      "conditions": [
+        {
+          "id": 17,
+          "feature": "RET_120",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.2,
+          "label": "RET_120 0% to 20%",
+          "group": "RET_120"
+        },
+        {
+          "id": 30,
+          "feature": "RS_60",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RS_60 >= 5%",
+          "group": "RS_60"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        26,
+        38,
+        50
+      ],
+      "rule": "RS_40 0% to 5% AND DIST_SMA50 < -5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 57,
+      "train_hits": 43,
+      "train_hit_rate": 0.7543859649122807,
+      "train_median_days": 3.0,
+      "train_expected_days_20": 8.596491228070175,
+      "train_etf_coverage": 7,
+      "test_observations": 41,
+      "test_hits": 35,
+      "test_hit_rate": 0.8536585365853658,
+      "test_median_days": 9.0,
+      "test_expected_days_20": 10.512195121951219,
+      "test_etf_coverage": 11,
+      "conditions": [
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 38,
+          "feature": "DIST_SMA50",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "DIST_SMA50 < -5%",
+          "group": "DIST_SMA50"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        0,
+        50,
+        77
+      ],
+      "rule": "RET_5 < -5% AND DIST_HIGH_20 < -10% AND VOLUME_RATIO_20 75% to 100%",
+      "train_observations": 42,
+      "train_hits": 35,
+      "train_hit_rate": 0.8333333333333334,
+      "train_median_days": 3.0,
+      "train_expected_days_20": 7.690476190476191,
+      "train_etf_coverage": 8,
+      "test_observations": 26,
+      "test_hits": 20,
+      "test_hit_rate": 0.7692307692307693,
+      "test_median_days": 5.5,
+      "test_expected_days_20": 10.73076923076923,
+      "test_etf_coverage": 9,
+      "conditions": [
+        {
+          "id": 0,
+          "feature": "RET_5",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "RET_5 < -5%",
+          "group": "RET_5"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        },
+        {
+          "id": 77,
+          "feature": "VOLUME_RATIO_20",
+          "op": "range",
+          "v1": 0.75,
+          "v2": 1.0,
+          "label": "VOLUME_RATIO_20 75% to 100%",
+          "group": "VOLUME_RATIO_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        24,
+        42
+      ],
+      "rule": "RS_20 >= 5% AND DIST_SMA100 < -5%",
+      "train_observations": 98,
+      "train_hits": 91,
+      "train_hit_rate": 0.9285714285714286,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 6.336734693877551,
+      "train_etf_coverage": 7,
+      "test_observations": 28,
+      "test_hits": 19,
+      "test_hit_rate": 0.6785714285714286,
+      "test_median_days": 6.0,
+      "test_expected_days_20": 10.785714285714286,
+      "test_etf_coverage": 6,
+      "conditions": [
+        {
+          "id": 24,
+          "feature": "RS_20",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RS_20 >= 5%",
+          "group": "RS_20"
+        },
+        {
+          "id": 42,
+          "feature": "DIST_SMA100",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "DIST_SMA100 < -5%",
+          "group": "DIST_SMA100"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        26,
+        50
+      ],
+      "rule": "RS_40 0% to 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 75,
+      "train_hits": 58,
+      "train_hit_rate": 0.7733333333333333,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 8.96,
+      "train_etf_coverage": 7,
+      "test_observations": 62,
+      "test_hits": 50,
+      "test_hit_rate": 0.8064516129032258,
+      "test_median_days": 8.5,
+      "test_expected_days_20": 10.919354838709678,
+      "test_etf_coverage": 13,
+      "conditions": [
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        26,
+        50,
+        66
+      ],
+      "rule": "RS_40 0% to 5% AND DIST_HIGH_20 < -10% AND BREAKOUT_20 < -5%",
+      "train_observations": 75,
+      "train_hits": 58,
+      "train_hit_rate": 0.7733333333333333,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 8.96,
+      "train_etf_coverage": 7,
+      "test_observations": 62,
+      "test_hits": 50,
+      "test_hit_rate": 0.8064516129032258,
+      "test_median_days": 8.5,
+      "test_expected_days_20": 10.919354838709678,
+      "test_etf_coverage": 13,
+      "conditions": [
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        },
+        {
+          "id": 66,
+          "feature": "BREAKOUT_20",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "BREAKOUT_20 < -5%",
+          "group": "BREAKOUT_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        7,
+        26,
+        50
+      ],
+      "rule": "RET_20 < 0% AND RS_40 0% to 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 73,
+      "train_hits": 56,
+      "train_hit_rate": 0.7671232876712328,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 9.150684931506849,
+      "train_etf_coverage": 7,
+      "test_observations": 59,
+      "test_hits": 48,
+      "test_hit_rate": 0.8135593220338984,
+      "test_median_days": 9.0,
+      "test_expected_days_20": 11.016949152542374,
+      "test_etf_coverage": 13,
+      "conditions": [
+        {
+          "id": 7,
+          "feature": "RET_20",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_20 < 0%",
+          "group": "RET_20"
+        },
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        4,
+        26,
+        50
+      ],
+      "rule": "RET_10 < 0% AND RS_40 0% to 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 70,
+      "train_hits": 53,
+      "train_hit_rate": 0.7571428571428571,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 9.128571428571428,
+      "train_etf_coverage": 7,
+      "test_observations": 58,
+      "test_hits": 46,
+      "test_hit_rate": 0.7931034482758621,
+      "test_median_days": 8.5,
+      "test_expected_days_20": 11.03448275862069,
+      "test_etf_coverage": 13,
+      "conditions": [
+        {
+          "id": 4,
+          "feature": "RET_10",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_10 < 0%",
+          "group": "RET_10"
+        },
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        10,
+        26,
+        50
+      ],
+      "rule": "RET_40 < 0% AND RS_40 0% to 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 59,
+      "train_hits": 47,
+      "train_hit_rate": 0.7966101694915254,
+      "train_median_days": 3.0,
+      "train_expected_days_20": 8.23728813559322,
+      "train_etf_coverage": 7,
+      "test_observations": 49,
+      "test_hits": 40,
+      "test_hit_rate": 0.8163265306122449,
+      "test_median_days": 9.0,
+      "test_expected_days_20": 11.040816326530612,
+      "test_etf_coverage": 12,
+      "conditions": [
+        {
+          "id": 10,
+          "feature": "RET_40",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_40 < 0%",
+          "group": "RET_40"
+        },
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        16,
+        26,
+        50
+      ],
+      "rule": "RET_120 < 0% AND RS_40 0% to 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 51,
+      "train_hits": 39,
+      "train_hit_rate": 0.7647058823529411,
+      "train_median_days": 3.0,
+      "train_expected_days_20": 8.588235294117647,
+      "train_etf_coverage": 6,
+      "test_observations": 24,
+      "test_hits": 20,
+      "test_hit_rate": 0.8333333333333334,
+      "test_median_days": 9.0,
+      "test_expected_days_20": 11.041666666666666,
+      "test_etf_coverage": 7,
+      "conditions": [
+        {
+          "id": 16,
+          "feature": "RET_120",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_120 < 0%",
+          "group": "RET_120"
+        },
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        26,
+        50,
+        54
+      ],
+      "rule": "RS_40 0% to 5% AND DIST_HIGH_20 < -10% AND DIST_HIGH_50 < -10%",
+      "train_observations": 73,
+      "train_hits": 57,
+      "train_hit_rate": 0.7808219178082192,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 8.904109589041095,
+      "train_etf_coverage": 7,
+      "test_observations": 61,
+      "test_hits": 49,
+      "test_hit_rate": 0.8032786885245902,
+      "test_median_days": 9.0,
+      "test_expected_days_20": 11.081967213114755,
+      "test_etf_coverage": 13,
+      "conditions": [
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        },
+        {
+          "id": 54,
+          "feature": "DIST_HIGH_50",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_50 < -10%",
+          "group": "DIST_HIGH_50"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        26,
+        50,
+        69
+      ],
+      "rule": "RS_40 0% to 5% AND DIST_HIGH_20 < -10% AND BREAKOUT_50 < -5%",
+      "train_observations": 73,
+      "train_hits": 57,
+      "train_hit_rate": 0.7808219178082192,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 8.904109589041095,
+      "train_etf_coverage": 7,
+      "test_observations": 61,
+      "test_hits": 49,
+      "test_hit_rate": 0.8032786885245902,
+      "test_median_days": 9.0,
+      "test_expected_days_20": 11.081967213114755,
+      "test_etf_coverage": 13,
+      "conditions": [
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        },
+        {
+          "id": 69,
+          "feature": "BREAKOUT_50",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "BREAKOUT_50 < -5%",
+          "group": "BREAKOUT_50"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        33,
+        50,
+        72
+      ],
+      "rule": "RS_120 >= 5% AND DIST_HIGH_20 < -10% AND RSI14 < 3500%",
+      "train_observations": 45,
+      "train_hits": 35,
+      "train_hit_rate": 0.7777777777777778,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 8.666666666666666,
+      "train_etf_coverage": 6,
+      "test_observations": 59,
+      "test_hits": 40,
+      "test_hit_rate": 0.6779661016949152,
+      "test_median_days": 4.0,
+      "test_expected_days_20": 11.084745762711865,
+      "test_etf_coverage": 9,
+      "conditions": [
+        {
+          "id": 33,
+          "feature": "RS_120",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RS_120 >= 5%",
+          "group": "RS_120"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        },
+        {
+          "id": 72,
+          "feature": "RSI14",
+          "op": "lt",
+          "v1": 35.0,
+          "v2": null,
+          "label": "RSI14 < 3500%",
+          "group": "RSI14"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        13,
+        18,
+        54
+      ],
+      "rule": "RET_60 < 0% AND RET_120 >= 20% AND DIST_HIGH_50 < -10%",
+      "train_observations": 68,
+      "train_hits": 60,
+      "train_hit_rate": 0.8823529411764706,
+      "train_median_days": 7.0,
+      "train_expected_days_20": 8.705882352941176,
+      "train_etf_coverage": 6,
+      "test_observations": 84,
+      "test_hits": 63,
+      "test_hit_rate": 0.75,
+      "test_median_days": 7.0,
+      "test_expected_days_20": 11.178571428571429,
+      "test_etf_coverage": 6,
+      "conditions": [
+        {
+          "id": 13,
+          "feature": "RET_60",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_60 < 0%",
+          "group": "RET_60"
+        },
+        {
+          "id": 18,
+          "feature": "RET_120",
+          "op": "ge",
+          "v1": 0.2,
+          "v2": null,
+          "label": "RET_120 >= 20%",
+          "group": "RET_120"
+        },
+        {
+          "id": 54,
+          "feature": "DIST_HIGH_50",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_50 < -10%",
+          "group": "DIST_HIGH_50"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        3,
+        54,
+        66
+      ],
+      "rule": "RET_5 >= 5% AND DIST_HIGH_50 < -10% AND BREAKOUT_20 < -5%",
+      "train_observations": 66,
+      "train_hits": 55,
+      "train_hit_rate": 0.8333333333333334,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 8.318181818181818,
+      "train_etf_coverage": 9,
+      "test_observations": 37,
+      "test_hits": 25,
+      "test_hit_rate": 0.6756756756756757,
+      "test_median_days": 5.0,
+      "test_expected_days_20": 11.297297297297296,
+      "test_etf_coverage": 7,
+      "conditions": [
+        {
+          "id": 3,
+          "feature": "RET_5",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RET_5 >= 5%",
+          "group": "RET_5"
+        },
+        {
+          "id": 54,
+          "feature": "DIST_HIGH_50",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_50 < -10%",
+          "group": "DIST_HIGH_50"
+        },
+        {
+          "id": 66,
+          "feature": "BREAKOUT_20",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "BREAKOUT_20 < -5%",
+          "group": "BREAKOUT_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        13,
+        18,
+        38
+      ],
+      "rule": "RET_60 < 0% AND RET_120 >= 20% AND DIST_SMA50 < -5%",
+      "train_observations": 44,
+      "train_hits": 40,
+      "train_hit_rate": 0.9090909090909091,
+      "train_median_days": 7.0,
+      "train_expected_days_20": 8.340909090909092,
+      "train_etf_coverage": 5,
+      "test_observations": 37,
+      "test_hits": 24,
+      "test_hit_rate": 0.6486486486486487,
+      "test_median_days": 5.0,
+      "test_expected_days_20": 11.297297297297296,
+      "test_etf_coverage": 3,
+      "conditions": [
+        {
+          "id": 13,
+          "feature": "RET_60",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_60 < 0%",
+          "group": "RET_60"
+        },
+        {
+          "id": 18,
+          "feature": "RET_120",
+          "op": "ge",
+          "v1": 0.2,
+          "v2": null,
+          "label": "RET_120 >= 20%",
+          "group": "RET_120"
+        },
+        {
+          "id": 38,
+          "feature": "DIST_SMA50",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "DIST_SMA50 < -5%",
+          "group": "DIST_SMA50"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        33,
+        34,
+        38
+      ],
+      "rule": "RS_120 >= 5% AND DIST_SMA20 < -5% AND DIST_SMA50 < -5%",
+      "train_observations": 79,
+      "train_hits": 66,
+      "train_hit_rate": 0.8354430379746836,
+      "train_median_days": 4.5,
+      "train_expected_days_20": 8.50632911392405,
+      "train_etf_coverage": 8,
+      "test_observations": 103,
+      "test_hits": 69,
+      "test_hit_rate": 0.6699029126213593,
+      "test_median_days": 4.0,
+      "test_expected_days_20": 11.300970873786408,
+      "test_etf_coverage": 9,
+      "conditions": [
+        {
+          "id": 33,
+          "feature": "RS_120",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RS_120 >= 5%",
+          "group": "RS_120"
+        },
+        {
+          "id": 34,
+          "feature": "DIST_SMA20",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "DIST_SMA20 < -5%",
+          "group": "DIST_SMA20"
+        },
+        {
+          "id": 38,
+          "feature": "DIST_SMA50",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "DIST_SMA50 < -5%",
+          "group": "DIST_SMA50"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        7,
+        10,
+        24
+      ],
+      "rule": "RET_20 < 0% AND RET_40 < 0% AND RS_20 >= 5%",
+      "train_observations": 69,
+      "train_hits": 51,
+      "train_hit_rate": 0.7391304347826086,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 8.927536231884059,
+      "train_etf_coverage": 8,
+      "test_observations": 25,
+      "test_hits": 18,
+      "test_hit_rate": 0.72,
+      "test_median_days": 7.5,
+      "test_expected_days_20": 11.32,
+      "test_etf_coverage": 10,
+      "conditions": [
+        {
+          "id": 7,
+          "feature": "RET_20",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_20 < 0%",
+          "group": "RET_20"
+        },
+        {
+          "id": 10,
+          "feature": "RET_40",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_40 < 0%",
+          "group": "RET_40"
+        },
+        {
+          "id": 24,
+          "feature": "RS_20",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RS_20 >= 5%",
+          "group": "RS_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        26,
+        50,
+        72
+      ],
+      "rule": "RS_40 0% to 5% AND DIST_HIGH_20 < -10% AND RSI14 < 3500%",
+      "train_observations": 44,
+      "train_hits": 33,
+      "train_hit_rate": 0.75,
+      "train_median_days": 3.0,
+      "train_expected_days_20": 8.886363636363637,
+      "train_etf_coverage": 6,
+      "test_observations": 21,
+      "test_hits": 16,
+      "test_hit_rate": 0.7619047619047619,
+      "test_median_days": 7.5,
+      "test_expected_days_20": 11.333333333333334,
+      "test_etf_coverage": 9,
+      "conditions": [
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        },
+        {
+          "id": 72,
+          "feature": "RSI14",
+          "op": "lt",
+          "v1": 35.0,
+          "v2": null,
+          "label": "RSI14 < 3500%",
+          "group": "RSI14"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        18,
+        21,
+        38
+      ],
+      "rule": "RET_120 >= 20% AND RET_252 >= 20% AND DIST_SMA50 < -5%",
+      "train_observations": 74,
+      "train_hits": 64,
+      "train_hit_rate": 0.8648648648648649,
+      "train_median_days": 6.0,
+      "train_expected_days_20": 8.878378378378379,
+      "train_etf_coverage": 6,
+      "test_observations": 54,
+      "test_hits": 34,
+      "test_hit_rate": 0.6296296296296297,
+      "test_median_days": 4.0,
+      "test_expected_days_20": 11.333333333333334,
+      "test_etf_coverage": 4,
+      "conditions": [
+        {
+          "id": 18,
+          "feature": "RET_120",
+          "op": "ge",
+          "v1": 0.2,
+          "v2": null,
+          "label": "RET_120 >= 20%",
+          "group": "RET_120"
+        },
+        {
+          "id": 21,
+          "feature": "RET_252",
+          "op": "ge",
+          "v1": 0.2,
+          "v2": null,
+          "label": "RET_252 >= 20%",
+          "group": "RET_252"
+        },
+        {
+          "id": 38,
+          "feature": "DIST_SMA50",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "DIST_SMA50 < -5%",
+          "group": "DIST_SMA50"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        26,
+        34,
+        50
+      ],
+      "rule": "RS_40 0% to 5% AND DIST_SMA20 < -5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 56,
+      "train_hits": 43,
+      "train_hit_rate": 0.7678571428571429,
+      "train_median_days": 3.0,
+      "train_expected_days_20": 8.767857142857142,
+      "train_etf_coverage": 7,
+      "test_observations": 37,
+      "test_hits": 29,
+      "test_hit_rate": 0.7837837837837838,
+      "test_median_days": 9.0,
+      "test_expected_days_20": 11.405405405405405,
+      "test_etf_coverage": 12,
+      "conditions": [
+        {
+          "id": 26,
+          "feature": "RS_40",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_40 0% to 5%",
+          "group": "RS_40"
+        },
+        {
+          "id": 34,
+          "feature": "DIST_SMA20",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "DIST_SMA20 < -5%",
+          "group": "DIST_SMA20"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        13,
+        33,
+        50
+      ],
+      "rule": "RET_60 < 0% AND RS_120 >= 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 81,
+      "train_hits": 69,
+      "train_hit_rate": 0.8518518518518519,
+      "train_median_days": 5.0,
+      "train_expected_days_20": 8.91358024691358,
+      "train_etf_coverage": 6,
+      "test_observations": 86,
+      "test_hits": 54,
+      "test_hit_rate": 0.627906976744186,
+      "test_median_days": 4.0,
+      "test_expected_days_20": 11.569767441860465,
+      "test_etf_coverage": 8,
+      "conditions": [
+        {
+          "id": 13,
+          "feature": "RET_60",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_60 < 0%",
+          "group": "RET_60"
+        },
+        {
+          "id": 33,
+          "feature": "RS_120",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RS_120 >= 5%",
+          "group": "RS_120"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        16,
+        50,
+        73
+      ],
+      "rule": "RET_120 < 0% AND DIST_HIGH_20 < -10% AND RSI14 3500% to 5000%",
+      "train_observations": 164,
+      "train_hits": 121,
+      "train_hit_rate": 0.7378048780487805,
+      "train_median_days": 4.0,
+      "train_expected_days_20": 9.164634146341463,
+      "train_etf_coverage": 8,
+      "test_observations": 56,
+      "test_hits": 44,
+      "test_hit_rate": 0.7857142857142857,
+      "test_median_days": 9.5,
+      "test_expected_days_20": 11.642857142857142,
+      "test_etf_coverage": 10,
+      "conditions": [
+        {
+          "id": 16,
+          "feature": "RET_120",
+          "op": "lt",
+          "v1": 0.0,
+          "v2": null,
+          "label": "RET_120 < 0%",
+          "group": "RET_120"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        },
+        {
+          "id": 73,
+          "feature": "RSI14",
+          "op": "range",
+          "v1": 35.0,
+          "v2": 50.0,
+          "label": "RSI14 3500% to 5000%",
+          "group": "RSI14"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        23,
+        50
+      ],
+      "rule": "RS_20 0% to 5% AND DIST_HIGH_20 < -10%",
+      "train_observations": 84,
+      "train_hits": 64,
+      "train_hit_rate": 0.7619047619047619,
+      "train_median_days": 3.5,
+      "train_expected_days_20": 8.892857142857142,
+      "train_etf_coverage": 11,
+      "test_observations": 40,
+      "test_hits": 29,
+      "test_hit_rate": 0.725,
+      "test_median_days": 7.0,
+      "test_expected_days_20": 11.675,
+      "test_etf_coverage": 11,
+      "conditions": [
+        {
+          "id": 23,
+          "feature": "RS_20",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_20 0% to 5%",
+          "group": "RS_20"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        23,
+        50,
+        66
+      ],
+      "rule": "RS_20 0% to 5% AND DIST_HIGH_20 < -10% AND BREAKOUT_20 < -5%",
+      "train_observations": 84,
+      "train_hits": 64,
+      "train_hit_rate": 0.7619047619047619,
+      "train_median_days": 3.5,
+      "train_expected_days_20": 8.892857142857142,
+      "train_etf_coverage": 11,
+      "test_observations": 40,
+      "test_hits": 29,
+      "test_hit_rate": 0.725,
+      "test_median_days": 7.0,
+      "test_expected_days_20": 11.675,
+      "test_etf_coverage": 11,
+      "conditions": [
+        {
+          "id": 23,
+          "feature": "RS_20",
+          "op": "range",
+          "v1": 0.0,
+          "v2": 0.05,
+          "label": "RS_20 0% to 5%",
+          "group": "RS_20"
+        },
+        {
+          "id": 50,
+          "feature": "DIST_HIGH_20",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_20 < -10%",
+          "group": "DIST_HIGH_20"
+        },
+        {
+          "id": 66,
+          "feature": "BREAKOUT_20",
+          "op": "lt",
+          "v1": -0.05,
+          "v2": null,
+          "label": "BREAKOUT_20 < -5%",
+          "group": "BREAKOUT_20"
+        }
+      ]
+    },
+    {
+      "condition_indices": [
+        33,
+        54,
+        72
+      ],
+      "rule": "RS_120 >= 5% AND DIST_HIGH_50 < -10% AND RSI14 < 3500%",
+      "train_observations": 64,
+      "train_hits": 51,
+      "train_hit_rate": 0.796875,
+      "train_median_days": 5.0,
+      "train_expected_days_20": 8.640625,
+      "train_etf_coverage": 8,
+      "test_observations": 90,
+      "test_hits": 54,
+      "test_hit_rate": 0.6,
+      "test_median_days": 4.0,
+      "test_expected_days_20": 11.766666666666667,
+      "test_etf_coverage": 11,
+      "conditions": [
+        {
+          "id": 33,
+          "feature": "RS_120",
+          "op": "ge",
+          "v1": 0.05,
+          "v2": null,
+          "label": "RS_120 >= 5%",
+          "group": "RS_120"
+        },
+        {
+          "id": 54,
+          "feature": "DIST_HIGH_50",
+          "op": "lt",
+          "v1": -0.1,
+          "v2": null,
+          "label": "DIST_HIGH_50 < -10%",
+          "group": "DIST_HIGH_50"
+        },
+        {
+          "id": 72,
+          "feature": "RSI14",
+          "op": "lt",
+          "v1": 35.0,
+          "v2": null,
+          "label": "RSI14 < 3500%",
+          "group": "RSI14"
+        }
+      ]
+    }
+  ],
+  "etf_specific_oos_rules": {
+    "AUTOBEES": [
+      {
+        "condition_indices": [
+          14,
+          39,
+          73
+        ],
+        "rule": "RET_60 0% to 10% AND DIST_SMA50 -5% to 0% AND RSI14 3500% to 5000%",
+        "train_observations": 28,
+        "train_hits": 21,
+        "train_hit_rate": 0.75,
+        "train_median_days": 10.0,
+        "train_expected_days_20": 13.142857142857142,
+        "train_etf_coverage": 1,
+        "test_observations": 20,
+        "test_hits": 14,
+        "test_hit_rate": 0.7,
+        "test_median_days": 10.5,
+        "test_expected_days_20": 13.3,
+        "test_etf_coverage": 1,
+        "ETF": "AUTOBEES",
+        "conditions": [
+          {
+            "id": 14,
+            "feature": "RET_60",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.1,
+            "label": "RET_60 0% to 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 39,
+            "feature": "DIST_SMA50",
+            "op": "range",
+            "v1": -0.05,
+            "v2": 0.0,
+            "label": "DIST_SMA50 -5% to 0%",
+            "group": "DIST_SMA50"
+          },
+          {
+            "id": 73,
+            "feature": "RSI14",
+            "op": "range",
+            "v1": 35.0,
+            "v2": 50.0,
+            "label": "RSI14 3500% to 5000%",
+            "group": "RSI14"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          7,
+          14,
+          73
+        ],
+        "rule": "RET_20 < 0% AND RET_60 0% to 10% AND RSI14 3500% to 5000%",
+        "train_observations": 28,
+        "train_hits": 21,
+        "train_hit_rate": 0.75,
+        "train_median_days": 11.0,
+        "train_expected_days_20": 13.321428571428571,
+        "train_etf_coverage": 1,
+        "test_observations": 29,
+        "test_hits": 21,
+        "test_hit_rate": 0.7241379310344828,
+        "test_median_days": 12.0,
+        "test_expected_days_20": 14.068965517241379,
+        "test_etf_coverage": 1,
+        "ETF": "AUTOBEES",
+        "conditions": [
+          {
+            "id": 7,
+            "feature": "RET_20",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_20 < 0%",
+            "group": "RET_20"
+          },
+          {
+            "id": 14,
+            "feature": "RET_60",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.1,
+            "label": "RET_60 0% to 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 73,
+            "feature": "RSI14",
+            "op": "range",
+            "v1": 35.0,
+            "v2": 50.0,
+            "label": "RSI14 3500% to 5000%",
+            "group": "RSI14"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          4,
+          14,
+          73
+        ],
+        "rule": "RET_10 < 0% AND RET_60 0% to 10% AND RSI14 3500% to 5000%",
+        "train_observations": 25,
+        "train_hits": 19,
+        "train_hit_rate": 0.76,
+        "train_median_days": 11.0,
+        "train_expected_days_20": 13.44,
+        "train_etf_coverage": 1,
+        "test_observations": 40,
+        "test_hits": 24,
+        "test_hit_rate": 0.6,
+        "test_median_days": 11.5,
+        "test_expected_days_20": 14.85,
+        "test_etf_coverage": 1,
+        "ETF": "AUTOBEES",
+        "conditions": [
+          {
+            "id": 4,
+            "feature": "RET_10",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_10 < 0%",
+            "group": "RET_10"
+          },
+          {
+            "id": 14,
+            "feature": "RET_60",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.1,
+            "label": "RET_60 0% to 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 73,
+            "feature": "RSI14",
+            "op": "range",
+            "v1": 35.0,
+            "v2": 50.0,
+            "label": "RSI14 3500% to 5000%",
+            "group": "RSI14"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          14,
+          73
+        ],
+        "rule": "RET_60 0% to 10% AND RSI14 3500% to 5000%",
+        "train_observations": 30,
+        "train_hits": 23,
+        "train_hit_rate": 0.7666666666666667,
+        "train_median_days": 10.0,
+        "train_expected_days_20": 12.966666666666667,
+        "train_etf_coverage": 1,
+        "test_observations": 49,
+        "test_hits": 28,
+        "test_hit_rate": 0.5714285714285714,
+        "test_median_days": 12.0,
+        "test_expected_days_20": 15.326530612244898,
+        "test_etf_coverage": 1,
+        "ETF": "AUTOBEES",
+        "conditions": [
+          {
+            "id": 14,
+            "feature": "RET_60",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.1,
+            "label": "RET_60 0% to 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 73,
+            "feature": "RSI14",
+            "op": "range",
+            "v1": 35.0,
+            "v2": 50.0,
+            "label": "RSI14 3500% to 5000%",
+            "group": "RSI14"
+          }
+        ]
+      }
+    ],
+    "CPSEETF": [
+      {
+        "condition_indices": [
+          30,
+          55,
+          66
+        ],
+        "rule": "RS_60 >= 5% AND DIST_HIGH_50 -10% to -5% AND BREAKOUT_20 < -5%",
+        "train_observations": 46,
+        "train_hits": 37,
+        "train_hit_rate": 0.8043478260869565,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.152173913043478,
+        "train_etf_coverage": 1,
+        "test_observations": 24,
+        "test_hits": 23,
+        "test_hit_rate": 0.9583333333333334,
+        "test_median_days": 8.0,
+        "test_expected_days_20": 9.541666666666666,
+        "test_etf_coverage": 1,
+        "ETF": "CPSEETF",
+        "conditions": [
+          {
+            "id": 30,
+            "feature": "RS_60",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_60 >= 5%",
+            "group": "RS_60"
+          },
+          {
+            "id": 55,
+            "feature": "DIST_HIGH_50",
+            "op": "range",
+            "v1": -0.1,
+            "v2": -0.05,
+            "label": "DIST_HIGH_50 -10% to -5%",
+            "group": "DIST_HIGH_50"
+          },
+          {
+            "id": 66,
+            "feature": "BREAKOUT_20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_20 < -5%",
+            "group": "BREAKOUT_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          15,
+          30,
+          66
+        ],
+        "rule": "RET_60 >= 10% AND RS_60 >= 5% AND BREAKOUT_20 < -5%",
+        "train_observations": 27,
+        "train_hits": 21,
+        "train_hit_rate": 0.7777777777777778,
+        "train_median_days": 4.0,
+        "train_expected_days_20": 8.185185185185185,
+        "train_etf_coverage": 1,
+        "test_observations": 23,
+        "test_hits": 22,
+        "test_hit_rate": 0.9565217391304348,
+        "test_median_days": 8.5,
+        "test_expected_days_20": 9.73913043478261,
+        "test_etf_coverage": 1,
+        "ETF": "CPSEETF",
+        "conditions": [
+          {
+            "id": 15,
+            "feature": "RET_60",
+            "op": "ge",
+            "v1": 0.1,
+            "v2": null,
+            "label": "RET_60 >= 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 30,
+            "feature": "RS_60",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_60 >= 5%",
+            "group": "RS_60"
+          },
+          {
+            "id": 66,
+            "feature": "BREAKOUT_20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_20 < -5%",
+            "group": "BREAKOUT_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          15,
+          66
+        ],
+        "rule": "RET_60 >= 10% AND BREAKOUT_20 < -5%",
+        "train_observations": 54,
+        "train_hits": 46,
+        "train_hit_rate": 0.8518518518518519,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.018518518518519,
+        "train_etf_coverage": 1,
+        "test_observations": 24,
+        "test_hits": 22,
+        "test_hit_rate": 0.9166666666666666,
+        "test_median_days": 8.5,
+        "test_expected_days_20": 10.166666666666666,
+        "test_etf_coverage": 1,
+        "ETF": "CPSEETF",
+        "conditions": [
+          {
+            "id": 15,
+            "feature": "RET_60",
+            "op": "ge",
+            "v1": 0.1,
+            "v2": null,
+            "label": "RET_60 >= 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 66,
+            "feature": "BREAKOUT_20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_20 < -5%",
+            "group": "BREAKOUT_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          15,
+          66,
+          69
+        ],
+        "rule": "RET_60 >= 10% AND BREAKOUT_20 < -5% AND BREAKOUT_50 < -5%",
+        "train_observations": 54,
+        "train_hits": 46,
+        "train_hit_rate": 0.8518518518518519,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.018518518518519,
+        "train_etf_coverage": 1,
+        "test_observations": 24,
+        "test_hits": 22,
+        "test_hit_rate": 0.9166666666666666,
+        "test_median_days": 8.5,
+        "test_expected_days_20": 10.166666666666666,
+        "test_etf_coverage": 1,
+        "ETF": "CPSEETF",
+        "conditions": [
+          {
+            "id": 15,
+            "feature": "RET_60",
+            "op": "ge",
+            "v1": 0.1,
+            "v2": null,
+            "label": "RET_60 >= 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 66,
+            "feature": "BREAKOUT_20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_20 < -5%",
+            "group": "BREAKOUT_20"
+          },
+          {
+            "id": 69,
+            "feature": "BREAKOUT_50",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_50 < -5%",
+            "group": "BREAKOUT_50"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          15,
+          69
+        ],
+        "rule": "RET_60 >= 10% AND BREAKOUT_50 < -5%",
+        "train_observations": 74,
+        "train_hits": 65,
+        "train_hit_rate": 0.8783783783783784,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.162162162162161,
+        "train_etf_coverage": 1,
+        "test_observations": 25,
+        "test_hits": 22,
+        "test_hit_rate": 0.88,
+        "test_median_days": 8.5,
+        "test_expected_days_20": 10.56,
+        "test_etf_coverage": 1,
+        "ETF": "CPSEETF",
+        "conditions": [
+          {
+            "id": 15,
+            "feature": "RET_60",
+            "op": "ge",
+            "v1": 0.1,
+            "v2": null,
+            "label": "RET_60 >= 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 69,
+            "feature": "BREAKOUT_50",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_50 < -5%",
+            "group": "BREAKOUT_50"
+          }
+        ]
+      }
+    ],
+    "GOLDBEES": [
+      {
+        "condition_indices": [
+          10,
+          21,
+          31
+        ],
+        "rule": "RET_40 < 0% AND RET_252 >= 20% AND RS_120 < 0%",
+        "train_observations": 79,
+        "train_hits": 54,
+        "train_hit_rate": 0.6835443037974683,
+        "train_median_days": 5.5,
+        "train_expected_days_20": 10.544303797468354,
+        "train_etf_coverage": 1,
+        "test_observations": 29,
+        "test_hits": 27,
+        "test_hit_rate": 0.9310344827586207,
+        "test_median_days": 11.0,
+        "test_expected_days_20": 11.724137931034482,
+        "test_etf_coverage": 1,
+        "ETF": "GOLDBEES",
+        "conditions": [
+          {
+            "id": 10,
+            "feature": "RET_40",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_40 < 0%",
+            "group": "RET_40"
+          },
+          {
+            "id": 21,
+            "feature": "RET_252",
+            "op": "ge",
+            "v1": 0.2,
+            "v2": null,
+            "label": "RET_252 >= 20%",
+            "group": "RET_252"
+          },
+          {
+            "id": 31,
+            "feature": "RS_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_120 < 0%",
+            "group": "RS_120"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          11,
+          21,
+          41
+        ],
+        "rule": "RET_40 0% to 10% AND RET_252 >= 20% AND DIST_SMA50 >= 5%",
+        "train_observations": 56,
+        "train_hits": 48,
+        "train_hit_rate": 0.8571428571428571,
+        "train_median_days": 8.0,
+        "train_expected_days_20": 10.357142857142858,
+        "train_etf_coverage": 1,
+        "test_observations": 43,
+        "test_hits": 29,
+        "test_hit_rate": 0.6744186046511628,
+        "test_median_days": 6.0,
+        "test_expected_days_20": 11.930232558139535,
+        "test_etf_coverage": 1,
+        "ETF": "GOLDBEES",
+        "conditions": [
+          {
+            "id": 11,
+            "feature": "RET_40",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.1,
+            "label": "RET_40 0% to 10%",
+            "group": "RET_40"
+          },
+          {
+            "id": 21,
+            "feature": "RET_252",
+            "op": "ge",
+            "v1": 0.2,
+            "v2": null,
+            "label": "RET_252 >= 20%",
+            "group": "RET_252"
+          },
+          {
+            "id": 41,
+            "feature": "DIST_SMA50",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "DIST_SMA50 >= 5%",
+            "group": "DIST_SMA50"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          33,
+          40,
+          69
+        ],
+        "rule": "RS_120 >= 5% AND DIST_SMA50 0% to 5% AND BREAKOUT_50 < -5%",
+        "train_observations": 25,
+        "train_hits": 17,
+        "train_hit_rate": 0.68,
+        "train_median_days": 4.0,
+        "train_expected_days_20": 10.4,
+        "train_etf_coverage": 1,
+        "test_observations": 24,
+        "test_hits": 18,
+        "test_hit_rate": 0.75,
+        "test_median_days": 9.5,
+        "test_expected_days_20": 12.208333333333334,
+        "test_etf_coverage": 1,
+        "ETF": "GOLDBEES",
+        "conditions": [
+          {
+            "id": 33,
+            "feature": "RS_120",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_120 >= 5%",
+            "group": "RS_120"
+          },
+          {
+            "id": 40,
+            "feature": "DIST_SMA50",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.05,
+            "label": "DIST_SMA50 0% to 5%",
+            "group": "DIST_SMA50"
+          },
+          {
+            "id": 69,
+            "feature": "BREAKOUT_50",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_50 < -5%",
+            "group": "BREAKOUT_50"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          21,
+          33,
+          66
+        ],
+        "rule": "RET_252 >= 20% AND RS_120 >= 5% AND BREAKOUT_20 < -5%",
+        "train_observations": 32,
+        "train_hits": 23,
+        "train_hit_rate": 0.71875,
+        "train_median_days": 4.0,
+        "train_expected_days_20": 8.65625,
+        "train_etf_coverage": 1,
+        "test_observations": 87,
+        "test_hits": 52,
+        "test_hit_rate": 0.5977011494252874,
+        "test_median_days": 7.0,
+        "test_expected_days_20": 12.885057471264368,
+        "test_etf_coverage": 1,
+        "ETF": "GOLDBEES",
+        "conditions": [
+          {
+            "id": 21,
+            "feature": "RET_252",
+            "op": "ge",
+            "v1": 0.2,
+            "v2": null,
+            "label": "RET_252 >= 20%",
+            "group": "RET_252"
+          },
+          {
+            "id": 33,
+            "feature": "RS_120",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_120 >= 5%",
+            "group": "RS_120"
+          },
+          {
+            "id": 66,
+            "feature": "BREAKOUT_20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_20 < -5%",
+            "group": "BREAKOUT_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          21,
+          69
+        ],
+        "rule": "RET_252 >= 20% AND BREAKOUT_50 < -5%",
+        "train_observations": 100,
+        "train_hits": 74,
+        "train_hit_rate": 0.74,
+        "train_median_days": 6.0,
+        "train_expected_days_20": 10.53,
+        "train_etf_coverage": 1,
+        "test_observations": 145,
+        "test_hits": 96,
+        "test_hit_rate": 0.6620689655172414,
+        "test_median_days": 9.0,
+        "test_expected_days_20": 13.03448275862069,
+        "test_etf_coverage": 1,
+        "ETF": "GOLDBEES",
+        "conditions": [
+          {
+            "id": 21,
+            "feature": "RET_252",
+            "op": "ge",
+            "v1": 0.2,
+            "v2": null,
+            "label": "RET_252 >= 20%",
+            "group": "RET_252"
+          },
+          {
+            "id": 69,
+            "feature": "BREAKOUT_50",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_50 < -5%",
+            "group": "BREAKOUT_50"
+          }
+        ]
+      }
+    ],
+    "HNGSNGBEES": [
+      {
+        "condition_indices": [
+          24,
+          30,
+          31
+        ],
+        "rule": "RS_20 >= 5% AND RS_60 >= 5% AND RS_120 < 0%",
+        "train_observations": 30,
+        "train_hits": 27,
+        "train_hit_rate": 0.9,
+        "train_median_days": 6.0,
+        "train_expected_days_20": 7.9,
+        "train_etf_coverage": 1,
+        "test_observations": 22,
+        "test_hits": 22,
+        "test_hit_rate": 1.0,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 5.136363636363637,
+        "test_etf_coverage": 1,
+        "ETF": "HNGSNGBEES",
+        "conditions": [
+          {
+            "id": 24,
+            "feature": "RS_20",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_20 >= 5%",
+            "group": "RS_20"
+          },
+          {
+            "id": 30,
+            "feature": "RS_60",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_60 >= 5%",
+            "group": "RS_60"
+          },
+          {
+            "id": 31,
+            "feature": "RS_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_120 < 0%",
+            "group": "RS_120"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          30,
+          31,
+          36
+        ],
+        "rule": "RS_60 >= 5% AND RS_120 < 0% AND DIST_SMA20 0% to 5%",
+        "train_observations": 41,
+        "train_hits": 32,
+        "train_hit_rate": 0.7804878048780488,
+        "train_median_days": 3.0,
+        "train_expected_days_20": 7.341463414634147,
+        "train_etf_coverage": 1,
+        "test_observations": 20,
+        "test_hits": 19,
+        "test_hit_rate": 0.95,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 5.15,
+        "test_etf_coverage": 1,
+        "ETF": "HNGSNGBEES",
+        "conditions": [
+          {
+            "id": 30,
+            "feature": "RS_60",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_60 >= 5%",
+            "group": "RS_60"
+          },
+          {
+            "id": 31,
+            "feature": "RS_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_120 < 0%",
+            "group": "RS_120"
+          },
+          {
+            "id": 36,
+            "feature": "DIST_SMA20",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.05,
+            "label": "DIST_SMA20 0% to 5%",
+            "group": "DIST_SMA20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          15,
+          24,
+          31
+        ],
+        "rule": "RET_60 >= 10% AND RS_20 >= 5% AND RS_120 < 0%",
+        "train_observations": 26,
+        "train_hits": 24,
+        "train_hit_rate": 0.9230769230769231,
+        "train_median_days": 7.0,
+        "train_expected_days_20": 8.23076923076923,
+        "train_etf_coverage": 1,
+        "test_observations": 21,
+        "test_hits": 21,
+        "test_hit_rate": 1.0,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 5.238095238095238,
+        "test_etf_coverage": 1,
+        "ETF": "HNGSNGBEES",
+        "conditions": [
+          {
+            "id": 15,
+            "feature": "RET_60",
+            "op": "ge",
+            "v1": 0.1,
+            "v2": null,
+            "label": "RET_60 >= 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 24,
+            "feature": "RS_20",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_20 >= 5%",
+            "group": "RS_20"
+          },
+          {
+            "id": 31,
+            "feature": "RS_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_120 < 0%",
+            "group": "RS_120"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          30,
+          31
+        ],
+        "rule": "RS_60 >= 5% AND RS_120 < 0%",
+        "train_observations": 58,
+        "train_hits": 47,
+        "train_hit_rate": 0.8103448275862069,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.620689655172415,
+        "train_etf_coverage": 1,
+        "test_observations": 44,
+        "test_hits": 43,
+        "test_hit_rate": 0.9772727272727273,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 5.613636363636363,
+        "test_etf_coverage": 1,
+        "ETF": "HNGSNGBEES",
+        "conditions": [
+          {
+            "id": 30,
+            "feature": "RS_60",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_60 >= 5%",
+            "group": "RS_60"
+          },
+          {
+            "id": 31,
+            "feature": "RS_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_120 < 0%",
+            "group": "RS_120"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          15,
+          31,
+          41
+        ],
+        "rule": "RET_60 >= 10% AND RS_120 < 0% AND DIST_SMA50 >= 5%",
+        "train_observations": 26,
+        "train_hits": 25,
+        "train_hit_rate": 0.9615384615384616,
+        "train_median_days": 6.0,
+        "train_expected_days_20": 7.461538461538462,
+        "train_etf_coverage": 1,
+        "test_observations": 26,
+        "test_hits": 25,
+        "test_hit_rate": 0.9615384615384616,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 5.6923076923076925,
+        "test_etf_coverage": 1,
+        "ETF": "HNGSNGBEES",
+        "conditions": [
+          {
+            "id": 15,
+            "feature": "RET_60",
+            "op": "ge",
+            "v1": 0.1,
+            "v2": null,
+            "label": "RET_60 >= 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 31,
+            "feature": "RS_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_120 < 0%",
+            "group": "RS_120"
+          },
+          {
+            "id": 41,
+            "feature": "DIST_SMA50",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "DIST_SMA50 >= 5%",
+            "group": "DIST_SMA50"
+          }
+        ]
+      }
+    ],
+    "ITBEES": [
+      {
+        "condition_indices": [
+          10,
+          20,
+          31
+        ],
+        "rule": "RET_40 < 0% AND RET_252 0% to 20% AND RS_120 < 0%",
+        "train_observations": 29,
+        "train_hits": 21,
+        "train_hit_rate": 0.7241379310344828,
+        "train_median_days": 3.0,
+        "train_expected_days_20": 8.03448275862069,
+        "train_etf_coverage": 1,
+        "test_observations": 43,
+        "test_hits": 23,
+        "test_hit_rate": 0.5348837209302325,
+        "test_median_days": 6.0,
+        "test_expected_days_20": 12.976744186046512,
+        "test_etf_coverage": 1,
+        "ETF": "ITBEES",
+        "conditions": [
+          {
+            "id": 10,
+            "feature": "RET_40",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_40 < 0%",
+            "group": "RET_40"
+          },
+          {
+            "id": 20,
+            "feature": "RET_252",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.2,
+            "label": "RET_252 0% to 20%",
+            "group": "RET_252"
+          },
+          {
+            "id": 31,
+            "feature": "RS_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_120 < 0%",
+            "group": "RS_120"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          20,
+          31,
+          54
+        ],
+        "rule": "RET_252 0% to 20% AND RS_120 < 0% AND DIST_HIGH_50 < -10%",
+        "train_observations": 29,
+        "train_hits": 21,
+        "train_hit_rate": 0.7241379310344828,
+        "train_median_days": 3.0,
+        "train_expected_days_20": 8.03448275862069,
+        "train_etf_coverage": 1,
+        "test_observations": 36,
+        "test_hits": 19,
+        "test_hit_rate": 0.5277777777777778,
+        "test_median_days": 6.0,
+        "test_expected_days_20": 13.055555555555555,
+        "test_etf_coverage": 1,
+        "ETF": "ITBEES",
+        "conditions": [
+          {
+            "id": 20,
+            "feature": "RET_252",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.2,
+            "label": "RET_252 0% to 20%",
+            "group": "RET_252"
+          },
+          {
+            "id": 31,
+            "feature": "RS_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_120 < 0%",
+            "group": "RS_120"
+          },
+          {
+            "id": 54,
+            "feature": "DIST_HIGH_50",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_50 < -10%",
+            "group": "DIST_HIGH_50"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          20,
+          42
+        ],
+        "rule": "RET_252 0% to 20% AND DIST_SMA100 < -5%",
+        "train_observations": 29,
+        "train_hits": 21,
+        "train_hit_rate": 0.7241379310344828,
+        "train_median_days": 3.0,
+        "train_expected_days_20": 8.03448275862069,
+        "train_etf_coverage": 1,
+        "test_observations": 45,
+        "test_hits": 23,
+        "test_hit_rate": 0.5111111111111111,
+        "test_median_days": 5.0,
+        "test_expected_days_20": 13.088888888888889,
+        "test_etf_coverage": 1,
+        "ETF": "ITBEES",
+        "conditions": [
+          {
+            "id": 20,
+            "feature": "RET_252",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.2,
+            "label": "RET_252 0% to 20%",
+            "group": "RET_252"
+          },
+          {
+            "id": 42,
+            "feature": "DIST_SMA100",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "DIST_SMA100 < -5%",
+            "group": "DIST_SMA100"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          20,
+          31,
+          69
+        ],
+        "rule": "RET_252 0% to 20% AND RS_120 < 0% AND BREAKOUT_50 < -5%",
+        "train_observations": 30,
+        "train_hits": 22,
+        "train_hit_rate": 0.7333333333333333,
+        "train_median_days": 3.0,
+        "train_expected_days_20": 8.066666666666666,
+        "train_etf_coverage": 1,
+        "test_observations": 41,
+        "test_hits": 21,
+        "test_hit_rate": 0.5121951219512195,
+        "test_median_days": 5.0,
+        "test_expected_days_20": 13.097560975609756,
+        "test_etf_coverage": 1,
+        "ETF": "ITBEES",
+        "conditions": [
+          {
+            "id": 20,
+            "feature": "RET_252",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.2,
+            "label": "RET_252 0% to 20%",
+            "group": "RET_252"
+          },
+          {
+            "id": 31,
+            "feature": "RS_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_120 < 0%",
+            "group": "RS_120"
+          },
+          {
+            "id": 69,
+            "feature": "BREAKOUT_50",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_50 < -5%",
+            "group": "BREAKOUT_50"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          46,
+          50
+        ],
+        "rule": "DIST_SMA200 < -5% AND DIST_HIGH_20 < -10%",
+        "train_observations": 26,
+        "train_hits": 23,
+        "train_hit_rate": 0.8846153846153846,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 7.8076923076923075,
+        "train_etf_coverage": 1,
+        "test_observations": 64,
+        "test_hits": 39,
+        "test_hit_rate": 0.609375,
+        "test_median_days": 8.0,
+        "test_expected_days_20": 13.140625,
+        "test_etf_coverage": 1,
+        "ETF": "ITBEES",
+        "conditions": [
+          {
+            "id": 46,
+            "feature": "DIST_SMA200",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "DIST_SMA200 < -5%",
+            "group": "DIST_SMA200"
+          },
+          {
+            "id": 50,
+            "feature": "DIST_HIGH_20",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_20 < -10%",
+            "group": "DIST_HIGH_20"
+          }
+        ]
+      }
+    ],
+    "MAFANG": [
+      {
+        "condition_indices": [
+          34,
+          38,
+          50
+        ],
+        "rule": "DIST_SMA20 < -5% AND DIST_SMA50 < -5% AND DIST_HIGH_20 < -10%",
+        "train_observations": 40,
+        "train_hits": 31,
+        "train_hit_rate": 0.775,
+        "train_median_days": 4.0,
+        "train_expected_days_20": 7.825,
+        "train_etf_coverage": 1,
+        "test_observations": 21,
+        "test_hits": 14,
+        "test_hit_rate": 0.6666666666666666,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 10.0,
+        "test_etf_coverage": 1,
+        "ETF": "MAFANG",
+        "conditions": [
+          {
+            "id": 34,
+            "feature": "DIST_SMA20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "DIST_SMA20 < -5%",
+            "group": "DIST_SMA20"
+          },
+          {
+            "id": 38,
+            "feature": "DIST_SMA50",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "DIST_SMA50 < -5%",
+            "group": "DIST_SMA50"
+          },
+          {
+            "id": 50,
+            "feature": "DIST_HIGH_20",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_20 < -10%",
+            "group": "DIST_HIGH_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          25,
+          34,
+          50
+        ],
+        "rule": "RS_40 < 0% AND DIST_SMA20 < -5% AND DIST_HIGH_20 < -10%",
+        "train_observations": 41,
+        "train_hits": 31,
+        "train_hit_rate": 0.7560975609756098,
+        "train_median_days": 4.0,
+        "train_expected_days_20": 8.121951219512194,
+        "train_etf_coverage": 1,
+        "test_observations": 21,
+        "test_hits": 14,
+        "test_hit_rate": 0.6666666666666666,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 10.0,
+        "test_etf_coverage": 1,
+        "ETF": "MAFANG",
+        "conditions": [
+          {
+            "id": 25,
+            "feature": "RS_40",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_40 < 0%",
+            "group": "RS_40"
+          },
+          {
+            "id": 34,
+            "feature": "DIST_SMA20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "DIST_SMA20 < -5%",
+            "group": "DIST_SMA20"
+          },
+          {
+            "id": 50,
+            "feature": "DIST_HIGH_20",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_20 < -10%",
+            "group": "DIST_HIGH_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          13,
+          34,
+          50
+        ],
+        "rule": "RET_60 < 0% AND DIST_SMA20 < -5% AND DIST_HIGH_20 < -10%",
+        "train_observations": 39,
+        "train_hits": 29,
+        "train_hit_rate": 0.7435897435897436,
+        "train_median_days": 3.0,
+        "train_expected_days_20": 8.205128205128204,
+        "train_etf_coverage": 1,
+        "test_observations": 21,
+        "test_hits": 14,
+        "test_hit_rate": 0.6666666666666666,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 10.0,
+        "test_etf_coverage": 1,
+        "ETF": "MAFANG",
+        "conditions": [
+          {
+            "id": 13,
+            "feature": "RET_60",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_60 < 0%",
+            "group": "RET_60"
+          },
+          {
+            "id": 34,
+            "feature": "DIST_SMA20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "DIST_SMA20 < -5%",
+            "group": "DIST_SMA20"
+          },
+          {
+            "id": 50,
+            "feature": "DIST_HIGH_20",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_20 < -10%",
+            "group": "DIST_HIGH_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          0,
+          7,
+          50
+        ],
+        "rule": "RET_5 < -5% AND RET_20 < 0% AND DIST_HIGH_20 < -10%",
+        "train_observations": 25,
+        "train_hits": 22,
+        "train_hit_rate": 0.88,
+        "train_median_days": 3.5,
+        "train_expected_days_20": 6.0,
+        "train_etf_coverage": 1,
+        "test_observations": 20,
+        "test_hits": 13,
+        "test_hit_rate": 0.65,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 10.0,
+        "test_etf_coverage": 1,
+        "ETF": "MAFANG",
+        "conditions": [
+          {
+            "id": 0,
+            "feature": "RET_5",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "RET_5 < -5%",
+            "group": "RET_5"
+          },
+          {
+            "id": 7,
+            "feature": "RET_20",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_20 < 0%",
+            "group": "RET_20"
+          },
+          {
+            "id": 50,
+            "feature": "DIST_HIGH_20",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_20 < -10%",
+            "group": "DIST_HIGH_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          22,
+          34,
+          50
+        ],
+        "rule": "RS_20 < 0% AND DIST_SMA20 < -5% AND DIST_HIGH_20 < -10%",
+        "train_observations": 39,
+        "train_hits": 29,
+        "train_hit_rate": 0.7435897435897436,
+        "train_median_days": 3.0,
+        "train_expected_days_20": 8.102564102564102,
+        "train_etf_coverage": 1,
+        "test_observations": 24,
+        "test_hits": 16,
+        "test_hit_rate": 0.6666666666666666,
+        "test_median_days": 4.5,
+        "test_expected_days_20": 10.25,
+        "test_etf_coverage": 1,
+        "ETF": "MAFANG",
+        "conditions": [
+          {
+            "id": 22,
+            "feature": "RS_20",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_20 < 0%",
+            "group": "RS_20"
+          },
+          {
+            "id": 34,
+            "feature": "DIST_SMA20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "DIST_SMA20 < -5%",
+            "group": "DIST_SMA20"
+          },
+          {
+            "id": 50,
+            "feature": "DIST_HIGH_20",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_20 < -10%",
+            "group": "DIST_HIGH_20"
+          }
+        ]
+      }
+    ],
+    "METALIETF": [],
+    "MON100": [
+      {
+        "condition_indices": [
+          13,
+          33,
+          66
+        ],
+        "rule": "RET_60 < 0% AND RS_120 >= 5% AND BREAKOUT_20 < -5%",
+        "train_observations": 34,
+        "train_hits": 27,
+        "train_hit_rate": 0.7941176470588235,
+        "train_median_days": 4.0,
+        "train_expected_days_20": 8.117647058823529,
+        "train_etf_coverage": 1,
+        "test_observations": 44,
+        "test_hits": 24,
+        "test_hit_rate": 0.5454545454545454,
+        "test_median_days": 5.5,
+        "test_expected_days_20": 13.363636363636363,
+        "test_etf_coverage": 1,
+        "ETF": "MON100",
+        "conditions": [
+          {
+            "id": 13,
+            "feature": "RET_60",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_60 < 0%",
+            "group": "RET_60"
+          },
+          {
+            "id": 33,
+            "feature": "RS_120",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_120 >= 5%",
+            "group": "RS_120"
+          },
+          {
+            "id": 66,
+            "feature": "BREAKOUT_20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_20 < -5%",
+            "group": "BREAKOUT_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          17,
+          25,
+          32
+        ],
+        "rule": "RET_120 0% to 20% AND RS_40 < 0% AND RS_120 0% to 5%",
+        "train_observations": 37,
+        "train_hits": 33,
+        "train_hit_rate": 0.8918918918918919,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.0,
+        "train_etf_coverage": 1,
+        "test_observations": 50,
+        "test_hits": 26,
+        "test_hit_rate": 0.52,
+        "test_median_days": 9.5,
+        "test_expected_days_20": 14.86,
+        "test_etf_coverage": 1,
+        "ETF": "MON100",
+        "conditions": [
+          {
+            "id": 17,
+            "feature": "RET_120",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.2,
+            "label": "RET_120 0% to 20%",
+            "group": "RET_120"
+          },
+          {
+            "id": 25,
+            "feature": "RS_40",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_40 < 0%",
+            "group": "RS_40"
+          },
+          {
+            "id": 32,
+            "feature": "RS_120",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.05,
+            "label": "RS_120 0% to 5%",
+            "group": "RS_120"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          14,
+          25,
+          32
+        ],
+        "rule": "RET_60 0% to 10% AND RS_40 < 0% AND RS_120 0% to 5%",
+        "train_observations": 30,
+        "train_hits": 26,
+        "train_hit_rate": 0.8666666666666667,
+        "train_median_days": 4.0,
+        "train_expected_days_20": 7.433333333333334,
+        "train_etf_coverage": 1,
+        "test_observations": 31,
+        "test_hits": 16,
+        "test_hit_rate": 0.5161290322580645,
+        "test_median_days": 10.5,
+        "test_expected_days_20": 14.96774193548387,
+        "test_etf_coverage": 1,
+        "ETF": "MON100",
+        "conditions": [
+          {
+            "id": 14,
+            "feature": "RET_60",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.1,
+            "label": "RET_60 0% to 10%",
+            "group": "RET_60"
+          },
+          {
+            "id": 25,
+            "feature": "RS_40",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_40 < 0%",
+            "group": "RS_40"
+          },
+          {
+            "id": 32,
+            "feature": "RS_120",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.05,
+            "label": "RS_120 0% to 5%",
+            "group": "RS_120"
+          }
+        ]
+      }
+    ],
+    "OILIETF": [],
+    "PHARMABEES": [
+      {
+        "condition_indices": [
+          16,
+          73,
+          76
+        ],
+        "rule": "RET_120 < 0% AND RSI14 3500% to 5000% AND VOLUME_RATIO_20 < 75%",
+        "train_observations": 50,
+        "train_hits": 44,
+        "train_hit_rate": 0.88,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 7.84,
+        "train_etf_coverage": 1,
+        "test_observations": 24,
+        "test_hits": 18,
+        "test_hit_rate": 0.75,
+        "test_median_days": 6.0,
+        "test_expected_days_20": 9.541666666666666,
+        "test_etf_coverage": 1,
+        "ETF": "PHARMABEES",
+        "conditions": [
+          {
+            "id": 16,
+            "feature": "RET_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_120 < 0%",
+            "group": "RET_120"
+          },
+          {
+            "id": 73,
+            "feature": "RSI14",
+            "op": "range",
+            "v1": 35.0,
+            "v2": 50.0,
+            "label": "RSI14 3500% to 5000%",
+            "group": "RSI14"
+          },
+          {
+            "id": 76,
+            "feature": "VOLUME_RATIO_20",
+            "op": "lt",
+            "v1": 0.75,
+            "v2": null,
+            "label": "VOLUME_RATIO_20 < 75%",
+            "group": "VOLUME_RATIO_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          22,
+          51,
+          76
+        ],
+        "rule": "RS_20 < 0% AND DIST_HIGH_20 -10% to -5% AND VOLUME_RATIO_20 < 75%",
+        "train_observations": 29,
+        "train_hits": 29,
+        "train_hit_rate": 1.0,
+        "train_median_days": 7.0,
+        "train_expected_days_20": 8.137931034482758,
+        "train_etf_coverage": 1,
+        "test_observations": 29,
+        "test_hits": 21,
+        "test_hit_rate": 0.7241379310344828,
+        "test_median_days": 6.0,
+        "test_expected_days_20": 10.96551724137931,
+        "test_etf_coverage": 1,
+        "ETF": "PHARMABEES",
+        "conditions": [
+          {
+            "id": 22,
+            "feature": "RS_20",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_20 < 0%",
+            "group": "RS_20"
+          },
+          {
+            "id": 51,
+            "feature": "DIST_HIGH_20",
+            "op": "range",
+            "v1": -0.1,
+            "v2": -0.05,
+            "label": "DIST_HIGH_20 -10% to -5%",
+            "group": "DIST_HIGH_20"
+          },
+          {
+            "id": 76,
+            "feature": "VOLUME_RATIO_20",
+            "op": "lt",
+            "v1": 0.75,
+            "v2": null,
+            "label": "VOLUME_RATIO_20 < 75%",
+            "group": "VOLUME_RATIO_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          22,
+          66,
+          76
+        ],
+        "rule": "RS_20 < 0% AND BREAKOUT_20 < -5% AND VOLUME_RATIO_20 < 75%",
+        "train_observations": 32,
+        "train_hits": 32,
+        "train_hit_rate": 1.0,
+        "train_median_days": 8.0,
+        "train_expected_days_20": 8.25,
+        "train_etf_coverage": 1,
+        "test_observations": 31,
+        "test_hits": 22,
+        "test_hit_rate": 0.7096774193548387,
+        "test_median_days": 6.5,
+        "test_expected_days_20": 11.161290322580646,
+        "test_etf_coverage": 1,
+        "ETF": "PHARMABEES",
+        "conditions": [
+          {
+            "id": 22,
+            "feature": "RS_20",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_20 < 0%",
+            "group": "RS_20"
+          },
+          {
+            "id": 66,
+            "feature": "BREAKOUT_20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_20 < -5%",
+            "group": "BREAKOUT_20"
+          },
+          {
+            "id": 76,
+            "feature": "VOLUME_RATIO_20",
+            "op": "lt",
+            "v1": 0.75,
+            "v2": null,
+            "label": "VOLUME_RATIO_20 < 75%",
+            "group": "VOLUME_RATIO_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          16,
+          35,
+          51
+        ],
+        "rule": "RET_120 < 0% AND DIST_SMA20 -5% to 0% AND DIST_HIGH_20 -10% to -5%",
+        "train_observations": 33,
+        "train_hits": 30,
+        "train_hit_rate": 0.9090909090909091,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.242424242424242,
+        "train_etf_coverage": 1,
+        "test_observations": 38,
+        "test_hits": 28,
+        "test_hit_rate": 0.7368421052631579,
+        "test_median_days": 6.5,
+        "test_expected_days_20": 11.210526315789474,
+        "test_etf_coverage": 1,
+        "ETF": "PHARMABEES",
+        "conditions": [
+          {
+            "id": 16,
+            "feature": "RET_120",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_120 < 0%",
+            "group": "RET_120"
+          },
+          {
+            "id": 35,
+            "feature": "DIST_SMA20",
+            "op": "range",
+            "v1": -0.05,
+            "v2": 0.0,
+            "label": "DIST_SMA20 -5% to 0%",
+            "group": "DIST_SMA20"
+          },
+          {
+            "id": 51,
+            "feature": "DIST_HIGH_20",
+            "op": "range",
+            "v1": -0.1,
+            "v2": -0.05,
+            "label": "DIST_HIGH_20 -10% to -5%",
+            "group": "DIST_HIGH_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          10,
+          51,
+          76
+        ],
+        "rule": "RET_40 < 0% AND DIST_HIGH_20 -10% to -5% AND VOLUME_RATIO_20 < 75%",
+        "train_observations": 30,
+        "train_hits": 30,
+        "train_hit_rate": 1.0,
+        "train_median_days": 6.5,
+        "train_expected_days_20": 8.066666666666666,
+        "train_etf_coverage": 1,
+        "test_observations": 31,
+        "test_hits": 21,
+        "test_hit_rate": 0.6774193548387096,
+        "test_median_days": 6.0,
+        "test_expected_days_20": 11.612903225806452,
+        "test_etf_coverage": 1,
+        "ETF": "PHARMABEES",
+        "conditions": [
+          {
+            "id": 10,
+            "feature": "RET_40",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_40 < 0%",
+            "group": "RET_40"
+          },
+          {
+            "id": 51,
+            "feature": "DIST_HIGH_20",
+            "op": "range",
+            "v1": -0.1,
+            "v2": -0.05,
+            "label": "DIST_HIGH_20 -10% to -5%",
+            "group": "DIST_HIGH_20"
+          },
+          {
+            "id": 76,
+            "feature": "VOLUME_RATIO_20",
+            "op": "lt",
+            "v1": 0.75,
+            "v2": null,
+            "label": "VOLUME_RATIO_20 < 75%",
+            "group": "VOLUME_RATIO_20"
+          }
+        ]
+      }
+    ],
+    "PSUBNKBEES": [
+      {
+        "condition_indices": [
+          2,
+          13,
+          33
+        ],
+        "rule": "RET_5 0% to 5% AND RET_60 < 0% AND RS_120 >= 5%",
+        "train_observations": 43,
+        "train_hits": 38,
+        "train_hit_rate": 0.8837209302325582,
+        "train_median_days": 4.5,
+        "train_expected_days_20": 7.023255813953488,
+        "train_etf_coverage": 1,
+        "test_observations": 22,
+        "test_hits": 17,
+        "test_hit_rate": 0.7727272727272727,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 9.045454545454545,
+        "test_etf_coverage": 1,
+        "ETF": "PSUBNKBEES",
+        "conditions": [
+          {
+            "id": 2,
+            "feature": "RET_5",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.05,
+            "label": "RET_5 0% to 5%",
+            "group": "RET_5"
+          },
+          {
+            "id": 13,
+            "feature": "RET_60",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_60 < 0%",
+            "group": "RET_60"
+          },
+          {
+            "id": 33,
+            "feature": "RS_120",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_120 >= 5%",
+            "group": "RS_120"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          13,
+          33,
+          52
+        ],
+        "rule": "RET_60 < 0% AND RS_120 >= 5% AND DIST_HIGH_20 -5% to 0%",
+        "train_observations": 32,
+        "train_hits": 29,
+        "train_hit_rate": 0.90625,
+        "train_median_days": 4.0,
+        "train_expected_days_20": 5.78125,
+        "train_etf_coverage": 1,
+        "test_observations": 30,
+        "test_hits": 21,
+        "test_hit_rate": 0.7,
+        "test_median_days": 5.0,
+        "test_expected_days_20": 10.166666666666666,
+        "test_etf_coverage": 1,
+        "ETF": "PSUBNKBEES",
+        "conditions": [
+          {
+            "id": 13,
+            "feature": "RET_60",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_60 < 0%",
+            "group": "RET_60"
+          },
+          {
+            "id": 33,
+            "feature": "RS_120",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_120 >= 5%",
+            "group": "RS_120"
+          },
+          {
+            "id": 52,
+            "feature": "DIST_HIGH_20",
+            "op": "range",
+            "v1": -0.05,
+            "v2": 0.0,
+            "label": "DIST_HIGH_20 -5% to 0%",
+            "group": "DIST_HIGH_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          13,
+          33,
+          67
+        ],
+        "rule": "RET_60 < 0% AND RS_120 >= 5% AND BREAKOUT_20 -5% to 0%",
+        "train_observations": 32,
+        "train_hits": 29,
+        "train_hit_rate": 0.90625,
+        "train_median_days": 4.0,
+        "train_expected_days_20": 5.6875,
+        "train_etf_coverage": 1,
+        "test_observations": 28,
+        "test_hits": 19,
+        "test_hit_rate": 0.6785714285714286,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 10.285714285714286,
+        "test_etf_coverage": 1,
+        "ETF": "PSUBNKBEES",
+        "conditions": [
+          {
+            "id": 13,
+            "feature": "RET_60",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_60 < 0%",
+            "group": "RET_60"
+          },
+          {
+            "id": 33,
+            "feature": "RS_120",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_120 >= 5%",
+            "group": "RS_120"
+          },
+          {
+            "id": 67,
+            "feature": "BREAKOUT_20",
+            "op": "range",
+            "v1": -0.05,
+            "v2": 0.0,
+            "label": "BREAKOUT_20 -5% to 0%",
+            "group": "BREAKOUT_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          22,
+          33,
+          74
+        ],
+        "rule": "RS_20 < 0% AND RS_120 >= 5% AND RSI14 5000% to 6500%",
+        "train_observations": 30,
+        "train_hits": 27,
+        "train_hit_rate": 0.9,
+        "train_median_days": 4.0,
+        "train_expected_days_20": 6.4,
+        "train_etf_coverage": 1,
+        "test_observations": 71,
+        "test_hits": 48,
+        "test_hit_rate": 0.676056338028169,
+        "test_median_days": 8.0,
+        "test_expected_days_20": 12.76056338028169,
+        "test_etf_coverage": 1,
+        "ETF": "PSUBNKBEES",
+        "conditions": [
+          {
+            "id": 22,
+            "feature": "RS_20",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_20 < 0%",
+            "group": "RS_20"
+          },
+          {
+            "id": 33,
+            "feature": "RS_120",
+            "op": "ge",
+            "v1": 0.05,
+            "v2": null,
+            "label": "RS_120 >= 5%",
+            "group": "RS_120"
+          },
+          {
+            "id": 74,
+            "feature": "RSI14",
+            "op": "range",
+            "v1": 50.0,
+            "v2": 65.0,
+            "label": "RSI14 5000% to 6500%",
+            "group": "RSI14"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          2,
+          18,
+          25
+        ],
+        "rule": "RET_5 0% to 5% AND RET_120 >= 20% AND RS_40 < 0%",
+        "train_observations": 39,
+        "train_hits": 31,
+        "train_hit_rate": 0.7948717948717948,
+        "train_median_days": 3.0,
+        "train_expected_days_20": 7.153846153846154,
+        "train_etf_coverage": 1,
+        "test_observations": 22,
+        "test_hits": 11,
+        "test_hit_rate": 0.5,
+        "test_median_days": 4.0,
+        "test_expected_days_20": 12.863636363636363,
+        "test_etf_coverage": 1,
+        "ETF": "PSUBNKBEES",
+        "conditions": [
+          {
+            "id": 2,
+            "feature": "RET_5",
+            "op": "range",
+            "v1": 0.0,
+            "v2": 0.05,
+            "label": "RET_5 0% to 5%",
+            "group": "RET_5"
+          },
+          {
+            "id": 18,
+            "feature": "RET_120",
+            "op": "ge",
+            "v1": 0.2,
+            "v2": null,
+            "label": "RET_120 >= 20%",
+            "group": "RET_120"
+          },
+          {
+            "id": 25,
+            "feature": "RS_40",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RS_40 < 0%",
+            "group": "RS_40"
+          }
+        ]
+      }
+    ],
+    "SILVERBEES": [
+      {
+        "condition_indices": [
+          4,
+          58
+        ],
+        "rule": "RET_10 < 0% AND DIST_HIGH_100 < -10%",
+        "train_observations": 57,
+        "train_hits": 48,
+        "train_hit_rate": 0.8421052631578947,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.421052631578947,
+        "train_etf_coverage": 1,
+        "test_observations": 135,
+        "test_hits": 92,
+        "test_hit_rate": 0.6814814814814815,
+        "test_median_days": 7.0,
+        "test_expected_days_20": 11.392592592592592,
+        "test_etf_coverage": 1,
+        "ETF": "SILVERBEES",
+        "conditions": [
+          {
+            "id": 4,
+            "feature": "RET_10",
+            "op": "lt",
+            "v1": 0.0,
+            "v2": null,
+            "label": "RET_10 < 0%",
+            "group": "RET_10"
+          },
+          {
+            "id": 58,
+            "feature": "DIST_HIGH_100",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_100 < -10%",
+            "group": "DIST_HIGH_100"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          58,
+          73
+        ],
+        "rule": "DIST_HIGH_100 < -10% AND RSI14 3500% to 5000%",
+        "train_observations": 34,
+        "train_hits": 30,
+        "train_hit_rate": 0.8823529411764706,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 7.5,
+        "train_etf_coverage": 1,
+        "test_observations": 125,
+        "test_hits": 87,
+        "test_hit_rate": 0.696,
+        "test_median_days": 8.0,
+        "test_expected_days_20": 11.84,
+        "test_etf_coverage": 1,
+        "ETF": "SILVERBEES",
+        "conditions": [
+          {
+            "id": 58,
+            "feature": "DIST_HIGH_100",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_100 < -10%",
+            "group": "DIST_HIGH_100"
+          },
+          {
+            "id": 73,
+            "feature": "RSI14",
+            "op": "range",
+            "v1": 35.0,
+            "v2": 50.0,
+            "label": "RSI14 3500% to 5000%",
+            "group": "RSI14"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          58,
+          66
+        ],
+        "rule": "DIST_HIGH_100 < -10% AND BREAKOUT_20 < -5%",
+        "train_observations": 49,
+        "train_hits": 41,
+        "train_hit_rate": 0.8367346938775511,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.612244897959183,
+        "train_etf_coverage": 1,
+        "test_observations": 166,
+        "test_hits": 105,
+        "test_hit_rate": 0.6325301204819277,
+        "test_median_days": 7.0,
+        "test_expected_days_20": 12.096385542168674,
+        "test_etf_coverage": 1,
+        "ETF": "SILVERBEES",
+        "conditions": [
+          {
+            "id": 58,
+            "feature": "DIST_HIGH_100",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_100 < -10%",
+            "group": "DIST_HIGH_100"
+          },
+          {
+            "id": 66,
+            "feature": "BREAKOUT_20",
+            "op": "lt",
+            "v1": -0.05,
+            "v2": null,
+            "label": "BREAKOUT_20 < -5%",
+            "group": "BREAKOUT_20"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          35,
+          58
+        ],
+        "rule": "DIST_SMA20 -5% to 0% AND DIST_HIGH_100 < -10%",
+        "train_observations": 47,
+        "train_hits": 39,
+        "train_hit_rate": 0.8297872340425532,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.23404255319149,
+        "train_etf_coverage": 1,
+        "test_observations": 87,
+        "test_hits": 57,
+        "test_hit_rate": 0.6551724137931034,
+        "test_median_days": 7.0,
+        "test_expected_days_20": 12.195402298850574,
+        "test_etf_coverage": 1,
+        "ETF": "SILVERBEES",
+        "conditions": [
+          {
+            "id": 35,
+            "feature": "DIST_SMA20",
+            "op": "range",
+            "v1": -0.05,
+            "v2": 0.0,
+            "label": "DIST_SMA20 -5% to 0%",
+            "group": "DIST_SMA20"
+          },
+          {
+            "id": 58,
+            "feature": "DIST_HIGH_100",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_100 < -10%",
+            "group": "DIST_HIGH_100"
+          }
+        ]
+      },
+      {
+        "condition_indices": [
+          1,
+          58
+        ],
+        "rule": "RET_5 -5% to 0% AND DIST_HIGH_100 < -10%",
+        "train_observations": 52,
+        "train_hits": 41,
+        "train_hit_rate": 0.7884615384615384,
+        "train_median_days": 5.0,
+        "train_expected_days_20": 8.807692307692308,
+        "train_etf_coverage": 1,
+        "test_observations": 69,
+        "test_hits": 44,
+        "test_hit_rate": 0.6376811594202898,
+        "test_median_days": 8.0,
+        "test_expected_days_20": 12.405797101449275,
+        "test_etf_coverage": 1,
+        "ETF": "SILVERBEES",
+        "conditions": [
+          {
+            "id": 1,
+            "feature": "RET_5",
+            "op": "range",
+            "v1": -0.05,
+            "v2": 0.0,
+            "label": "RET_5 -5% to 0%",
+            "group": "RET_5"
+          },
+          {
+            "id": 58,
+            "feature": "DIST_HIGH_100",
+            "op": "lt",
+            "v1": -0.1,
+            "v2": null,
+            "label": "DIST_HIGH_100 < -10%",
+            "group": "DIST_HIGH_100"
+          }
+        ]
+      }
+    ],
+    "BANKBEES": [],
+    "FMCGIETF": [],
+    "NIFTYBEES": [],
+    "PVTBANIETF": []
+  },
+  "fallback": {
+    "analog_k": 40,
+    "analog_min_history": 20,
+    "features": [
+      "RET_5",
+      "RET_10",
+      "RET_20",
+      "RET_40",
+      "RET_60",
+      "RET_120",
+      "RET_252",
+      "RS_20",
+      "RS_40",
+      "RS_60",
+      "RS_120",
+      "DIST_SMA20",
+      "DIST_SMA50",
+      "DIST_SMA100",
+      "DIST_SMA200",
+      "DIST_HIGH_20",
+      "DIST_HIGH_50",
+      "DIST_HIGH_100",
+      "DIST_HIGH_252",
+      "BREAKOUT_20",
+      "BREAKOUT_50",
+      "RSI14",
+      "VOLUME_RATIO_20"
+    ]
+  },
+  "current_signal_snapshot": [
+    {
+      "Rank": 1,
+      "ETF": "SILVERBEES",
+      "Category": "Commodity - Silver",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 215.9499969482422,
+      "Method": "ETF-SPECIFIC OOS RULE",
+      "Matched_Rules": 5,
+      "Evidence": 582,
+      "Predicted_Hit_Rate": 0.6612704469237594,
+      "Predicted_Median_Days": 7.0,
+      "Predicted_Expected_Days_20": 11.954779208171017,
+      "Best_Matching_Rule": "RET_10 < 0% AND DIST_HIGH_100 < -10%",
+      "Rationale": "5 ETF-specific OOS-validated rule(s) match today's state. Combined OOS evidence=582 observations. Best matched rule: RET_10 < 0% AND DIST_HIGH_100 < -10% (OOS hit=68.1%, expected=11.39 days).",
+      "RET_5": -0.011489561880827615,
+      "RET_10": -0.029830628055579567,
+      "RET_20": -0.06161737988834226,
+      "RET_40": 0.044801366285053046,
+      "RET_60": 0.021813195278858055,
+      "RET_120": -0.018542934389356502,
+      "RET_252": 0.7464617410703847,
+      "RS_20": -0.015300758626631383,
+      "RS_40": 0.09162139157340143,
+      "RS_60": 0.05618459760113059,
+      "RS_120": -0.027911702578383935,
+      "DIST_SMA20": -0.02036615133723252,
+      "DIST_SMA50": -0.009276436767293839,
+      "DIST_SMA100": -0.0419811576265382,
+      "DIST_SMA200": -0.06274326437377808,
+      "DIST_HIGH_20": -0.06279837399396915,
+      "DIST_HIGH_50": -0.07285763933586398,
+      "DIST_HIGH_100": -0.20293063600873817,
+      "DIST_HIGH_252": -0.3863487974169977,
+      "BREAKOUT_20": -0.06279837399396915,
+      "BREAKOUT_50": -0.07285763933586398,
+      "RSI14": 45.038139722402235,
+      "VOLUME_RATIO_20": 0.9070950327875467
+    },
+    {
+      "Rank": 2,
+      "ETF": "PSUBNKBEES",
+      "Category": "Indian Sector - PSU Banks",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 92.44999694824219,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.625,
+      "Predicted_Median_Days": 6.0,
+      "Predicted_Expected_Days_20": 12.275,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": 0.002602731440759065,
+      "RET_10": -0.012075281691622086,
+      "RET_20": -0.046022149884728525,
+      "RET_40": -0.005807086008523643,
+      "RET_60": -0.03677856100466992,
+      "RET_120": 0.0052190466583468265,
+      "RET_252": 0.1222384077514207,
+      "RS_20": 0.0010642196076995347,
+      "RS_40": 0.03874505459604549,
+      "RS_60": -0.004378048114335065,
+      "RS_120": -0.004376548052133611,
+      "DIST_SMA20": -0.014092800763574997,
+      "DIST_SMA50": -0.024113762031176766,
+      "DIST_SMA100": -0.015882170611233093,
+      "DIST_SMA200": -0.035439713674079165,
+      "DIST_HIGH_20": -0.03778106592041319,
+      "DIST_HIGH_50": -0.059224584243789735,
+      "DIST_HIGH_100": -0.059224584243789735,
+      "DIST_HIGH_252": -0.1585510636467311,
+      "BREAKOUT_20": -0.046022149884728525,
+      "BREAKOUT_50": -0.059224584243789735,
+      "RSI14": 40.216653051142806,
+      "VOLUME_RATIO_20": 0.9365225462321779
+    },
+    {
+      "Rank": 3,
+      "ETF": "MAFANG",
+      "Category": "International - FANG+",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 231.32000732421875,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.675,
+      "Predicted_Median_Days": 8.0,
+      "Predicted_Expected_Days_20": 12.75,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": -0.004989626740529496,
+      "RET_10": 0.014294526881188041,
+      "RET_20": 0.12679631199463937,
+      "RET_40": 0.20894748485166015,
+      "RET_60": 0.23945775744617115,
+      "RET_120": 0.49027190764746287,
+      "RET_252": 0.3654447926557498,
+      "RS_20": 0.1824126425864594,
+      "RS_40": 0.26312328672134955,
+      "RS_60": 0.2811502130138621,
+      "RS_120": 0.47604610752783993,
+      "DIST_SMA20": 0.027330981283987255,
+      "DIST_SMA50": 0.09818640642611354,
+      "DIST_SMA100": 0.14341475174921237,
+      "DIST_SMA200": 0.25921881713340533,
+      "DIST_HIGH_20": -0.06752126216575771,
+      "DIST_HIGH_50": -0.06752126216575771,
+      "DIST_HIGH_100": -0.06752126216575771,
+      "DIST_HIGH_252": -0.06752126216575771,
+      "BREAKOUT_20": -0.06752126216575771,
+      "BREAKOUT_50": -0.06752126216575771,
+      "RSI14": 56.649737249156544,
+      "VOLUME_RATIO_20": 0.7475060355555414
+    },
+    {
+      "Rank": 4,
+      "ETF": "GOLDBEES",
+      "Category": "Commodity - Gold",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 123.43000030517578,
+      "Method": "ETF-SPECIFIC OOS RULE",
+      "Matched_Rules": 1,
+      "Evidence": 145,
+      "Predicted_Hit_Rate": 0.6620689655172414,
+      "Predicted_Median_Days": 9.0,
+      "Predicted_Expected_Days_20": 13.03448275862069,
+      "Best_Matching_Rule": "RET_252 >= 20% AND BREAKOUT_50 < -5%",
+      "Rationale": "1 ETF-specific OOS-validated rule(s) match today's state. Combined OOS evidence=145 observations. Best matched rule: RET_252 >= 20% AND BREAKOUT_50 < -5% (OOS hit=66.2%, expected=13.03 days).",
+      "RET_5": -0.011848557469721244,
+      "RET_10": -0.018683403537350762,
+      "RET_20": -0.06753792507204615,
+      "RET_40": 0.056311526888996655,
+      "RET_60": 0.06902824600641244,
+      "RET_120": 0.013549035493662709,
+      "RET_252": 0.35206483806904876,
+      "RS_20": -0.02151352964983755,
+      "RS_40": 0.1036473497518311,
+      "RS_60": 0.10498785203531313,
+      "RS_120": 0.0038739245851235893,
+      "DIST_SMA20": -0.019447404020004444,
+      "DIST_SMA50": -0.00310143074826974,
+      "DIST_SMA100": -0.0012970272538619376,
+      "DIST_SMA200": 0.003617511206287949,
+      "DIST_HIGH_20": -0.05670619375034547,
+      "DIST_HIGH_50": -0.07209444940057463,
+      "DIST_HIGH_100": -0.07209444940057463,
+      "DIST_HIGH_252": -0.1576468891459848,
+      "BREAKOUT_20": -0.06753792507204615,
+      "BREAKOUT_50": -0.07209444940057463,
+      "RSI14": 43.618273325165305,
+      "VOLUME_RATIO_20": 0.8212226389828524
+    },
+    {
+      "Rank": 5,
+      "ETF": "MON100",
+      "Category": "International - NASDAQ 100",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 322.79998779296875,
+      "Method": "ETF-SPECIFIC OOS RULE",
+      "Matched_Rules": 1,
+      "Evidence": 44,
+      "Predicted_Hit_Rate": 0.5454545454545454,
+      "Predicted_Median_Days": 5.5,
+      "Predicted_Expected_Days_20": 13.363636363636363,
+      "Best_Matching_Rule": "RET_60 < 0% AND RS_120 >= 5% AND BREAKOUT_20 < -5%",
+      "Rationale": "1 ETF-specific OOS-validated rule(s) match today's state. Combined OOS evidence=44 observations. Best matched rule: RET_60 < 0% AND RS_120 >= 5% AND BREAKOUT_20 < -5% (OOS hit=54.5%, expected=13.36 days).",
+      "RET_5": -0.012149222248610592,
+      "RET_10": -0.052177288513645115,
+      "RET_20": -0.009815988365126538,
+      "RET_40": 0.023592094073419556,
+      "RET_60": -0.021551380043700163,
+      "RET_120": 0.3156714072253832,
+      "RET_252": 0.5041236982196753,
+      "RS_20": 0.03905744221997609,
+      "RS_40": 0.06946168161030619,
+      "RS_60": 0.011361339544944782,
+      "RS_120": 0.3031123041742916,
+      "DIST_SMA20": -0.022047883051404926,
+      "DIST_SMA50": -0.015608790074818968,
+      "DIST_SMA100": -0.017160748295364736,
+      "DIST_SMA200": 0.1323756606706532,
+      "DIST_HIGH_20": -0.06353357597477849,
+      "DIST_HIGH_50": -0.06353357597477849,
+      "DIST_HIGH_100": -0.06353357597477849,
+      "DIST_HIGH_252": -0.06353357597477849,
+      "BREAKOUT_20": -0.06353357597477849,
+      "BREAKOUT_50": -0.06353357597477849,
+      "RSI14": 43.00506086629718,
+      "VOLUME_RATIO_20": 1.0256368436725907
+    },
+    {
+      "Rank": 6,
+      "ETF": "METALIETF",
+      "Category": "Indian Sector - Metal",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 13.109999656677246,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.675,
+      "Predicted_Median_Days": 10.0,
+      "Predicted_Expected_Days_20": 13.45,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": 0.020233406030279122,
+      "RET_10": -0.02455356651853724,
+      "RET_20": -0.041666713142022194,
+      "RET_40": 0.028235267190372282,
+      "RET_60": 0.05470630207614047,
+      "RET_120": 0.11007613809235917,
+      "RET_252": 0.3096902454458479,
+      "RS_20": 0.005634631681062707,
+      "RS_40": 0.07431292631844277,
+      "RS_60": 0.09018415145995284,
+      "RS_120": 0.0994796011939394,
+      "DIST_SMA20": -0.005876803285137733,
+      "DIST_SMA50": 0.0035671934019818607,
+      "DIST_SMA100": 0.004136002088739543,
+      "DIST_SMA200": 0.05545405910436507,
+      "DIST_HIGH_20": -0.03318589594499244,
+      "DIST_HIGH_50": -0.041666713142022194,
+      "DIST_HIGH_100": -0.05068796101882245,
+      "DIST_HIGH_252": -0.05068796101882245,
+      "BREAKOUT_20": -0.041666713142022194,
+      "BREAKOUT_50": -0.041666713142022194,
+      "RSI14": 49.44282566245197,
+      "VOLUME_RATIO_20": 0.5332033177562646
+    },
+    {
+      "Rank": 7,
+      "ETF": "AUTOBEES",
+      "Category": "Indian Sector - Auto",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 277.20001220703125,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.525,
+      "Predicted_Median_Days": 9.0,
+      "Predicted_Expected_Days_20": 14.125,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": -0.007696416142864426,
+      "RET_10": -0.029105801108043172,
+      "RET_20": -0.07940611174556378,
+      "RET_40": -0.03542345501710331,
+      "RET_60": 0.004020485652736827,
+      "RET_120": 0.10800231961900475,
+      "RET_252": -0.011235933040505408,
+      "RS_20": -0.03396750541987026,
+      "RS_40": 0.007801505904631911,
+      "RS_60": 0.03779338290207779,
+      "RS_120": 0.0974255789248446,
+      "DIST_SMA20": -0.031414341834508086,
+      "DIST_SMA50": -0.049826473391899495,
+      "DIST_SMA100": -0.017635728706939524,
+      "DIST_SMA200": -0.006989282793248841,
+      "DIST_HIGH_20": -0.07278558961063031,
+      "DIST_HIGH_50": -0.09833126626858046,
+      "DIST_HIGH_100": -0.09833126626858046,
+      "DIST_HIGH_252": -0.09833126626858046,
+      "BREAKOUT_20": -0.07940611174556378,
+      "BREAKOUT_50": -0.09833126626858046,
+      "RSI14": 28.293337350992118,
+      "VOLUME_RATIO_20": 0.993710914134951
+    },
+    {
+      "Rank": 8,
+      "ETF": "BANKBEES",
+      "Category": "Indian Sector - Banks",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 575.8800048828125,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.6,
+      "Predicted_Median_Days": 12.0,
+      "Predicted_Expected_Days_20": 14.825,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": -0.011670192693148507,
+      "RET_10": -0.017051547813737744,
+      "RET_20": -0.039511653605107444,
+      "RET_40": -0.026802287513610024,
+      "RET_60": -0.042704925658902604,
+      "RET_120": 0.05868075156405661,
+      "RET_252": 0.004202546432784615,
+      "RS_20": 0.007896060490200307,
+      "RS_40": 0.016809008355181954,
+      "RS_60": -0.010503761793203892,
+      "RS_120": 0.04857482345459019,
+      "DIST_SMA20": -0.020768785848238824,
+      "DIST_SMA50": -0.02813100305154037,
+      "DIST_SMA100": -0.016409562240500497,
+      "DIST_SMA200": -0.025525183649737215,
+      "DIST_HIGH_20": -0.03503740664956878,
+      "DIST_HIGH_50": -0.0479749022317536,
+      "DIST_HIGH_100": -0.0479749022317536,
+      "DIST_HIGH_252": -0.09432891178957814,
+      "BREAKOUT_20": -0.039511653605107444,
+      "BREAKOUT_50": -0.0479749022317536,
+      "RSI14": 33.2097071786974,
+      "VOLUME_RATIO_20": 1.5368009001319602
+    },
+    {
+      "Rank": 9,
+      "ETF": "CPSEETF",
+      "Category": "Indian Sector - CPSE",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 92.72000122070312,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.35,
+      "Predicted_Median_Days": 5.0,
+      "Predicted_Expected_Days_20": 15.25,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": 0.004332772175055899,
+      "RET_10": -0.02183774316732956,
+      "RET_20": -0.005043472565618212,
+      "RET_40": -0.013931698134640236,
+      "RET_60": -0.04392660330760756,
+      "RET_120": -0.09373469423062353,
+      "RET_252": -0.003225063784020654,
+      "RS_20": 0.04406551950795823,
+      "RS_40": 0.03025635934611448,
+      "RS_60": -0.011766533816267799,
+      "RS_120": -0.10238569880842296,
+      "DIST_SMA20": -0.005166216188323358,
+      "DIST_SMA50": -0.014564704406629714,
+      "DIST_SMA100": -0.0457891410374357,
+      "DIST_SMA200": -0.05444857110863255,
+      "DIST_HIGH_20": -0.02183774316732956,
+      "DIST_HIGH_50": -0.041851767726122646,
+      "DIST_HIGH_100": -0.1329717682444831,
+      "DIST_HIGH_252": -0.14787240785688127,
+      "BREAKOUT_20": -0.02183774316732956,
+      "BREAKOUT_50": -0.041851767726122646,
+      "RSI14": 42.68288607676024,
+      "VOLUME_RATIO_20": 0.8268338070509329
+    },
+    {
+      "Rank": 10,
+      "ETF": "ITBEES",
+      "Category": "Indian Sector - IT",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 31.31999969482422,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.4,
+      "Predicted_Median_Days": 7.0,
+      "Predicted_Expected_Days_20": 15.7,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": -0.030340543819948218,
+      "RET_10": -0.025816540953709888,
+      "RET_20": -0.07227484443186938,
+      "RET_40": -0.09322527896215493,
+      "RET_60": 0.09395740876387748,
+      "RET_120": -0.09479765676146301,
+      "RET_252": -0.2152342817697328,
+      "RS_20": -0.02648425353164785,
+      "RS_40": -0.05259055475540664,
+      "RS_60": 0.13075557343211952,
+      "RS_120": -0.10343851453825204,
+      "DIST_SMA20": -0.05112475307361719,
+      "DIST_SMA50": -0.06440436127285665,
+      "DIST_SMA100": -0.03408163484236526,
+      "DIST_SMA200": -0.1010320126709161,
+      "DIST_HIGH_20": -0.09974133743567704,
+      "DIST_HIGH_50": -0.11123728141130806,
+      "DIST_HIGH_100": -0.11123728141130806,
+      "DIST_HIGH_252": -0.27650729885777625,
+      "BREAKOUT_20": -0.09974133743567704,
+      "BREAKOUT_50": -0.11123728141130806,
+      "RSI14": 33.00393526439015,
+      "VOLUME_RATIO_20": 0.6786125186856229
+    },
+    {
+      "Rank": 11,
+      "ETF": "PHARMABEES",
+      "Category": "Indian Sector - Pharma",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 27.799999237060547,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.35,
+      "Predicted_Median_Days": 6.0,
+      "Predicted_Expected_Days_20": 15.7,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": 0.016081820792888113,
+      "RET_10": 0.010909063165838173,
+      "RET_20": 0.012750399431450399,
+      "RET_40": 0.02658786245875122,
+      "RET_60": 0.07626787917821409,
+      "RET_120": 0.24719596658674448,
+      "RET_252": 0.21983317772136535,
+      "RS_20": 0.06273766014769366,
+      "RS_40": 0.0725916974766283,
+      "RS_60": 0.1124710095083894,
+      "RS_120": 0.21629845335138476,
+      "DIST_SMA20": 0.011497563262206079,
+      "DIST_SMA50": 0.021217786238328706,
+      "DIST_SMA100": 0.05732766782109522,
+      "DIST_SMA200": 0.12562680559861739,
+      "DIST_HIGH_20": -0.00322696861088112,
+      "DIST_HIGH_50": -0.00322696861088112,
+      "DIST_HIGH_100": -0.00322696861088112,
+      "DIST_HIGH_252": -0.00322696861088112,
+      "BREAKOUT_20": -0.00322696861088112,
+      "BREAKOUT_50": -0.00322696861088112,
+      "RSI14": 60.10559794241691,
+      "VOLUME_RATIO_20": 0.9558609834417586
+    },
+    {
+      "Rank": 12,
+      "ETF": "FMCGIETF",
+      "Category": "Indian Sector - FMCG",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 49.20000076293945,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.25,
+      "Predicted_Median_Days": 4.5,
+      "Predicted_Expected_Days_20": 16.825,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": 0.0016287018077021376,
+      "RET_10": 0.006340793151178747,
+      "RET_20": -0.03529410268746169,
+      "RET_40": -0.07640322244883802,
+      "RET_60": -0.07796101573891456,
+      "RET_120": 0.0012210291826673103,
+      "RET_252": -0.18407957901430627,
+      "RS_20": 0.01232178097995651,
+      "RS_40": -0.03501466202329151,
+      "RS_60": -0.04694578415716888,
+      "RS_120": -0.023582803438242927,
+      "DIST_SMA20": -0.003897332005313281,
+      "DIST_SMA50": -0.038480313830132395,
+      "DIST_SMA100": -0.056891290884652945,
+      "DIST_SMA200": -0.08017265932742468,
+      "DIST_HIGH_20": -0.027860103347315812,
+      "DIST_HIGH_50": -0.07640322244883802,
+      "DIST_HIGH_100": -0.10788759017798832,
+      "DIST_HIGH_252": -0.18677684689356278,
+      "BREAKOUT_20": -0.03529410268746169,
+      "BREAKOUT_50": -0.07640322244883802,
+      "RSI14": 40.56107362635341,
+      "VOLUME_RATIO_20": 0.666872582668914
+    },
+    {
+      "Rank": 13,
+      "ETF": "PVTBANIETF",
+      "Category": "Indian Sector - Private Banks",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 27.25,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.325,
+      "Predicted_Median_Days": 10.0,
+      "Predicted_Expected_Days_20": 17.125,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": -0.011965189435058976,
+      "RET_10": -0.010889264804660459,
+      "RET_20": -0.028174068820728038,
+      "RET_40": -0.02084081657549708,
+      "RET_60": -0.04285210195920952,
+      "RET_120": 0.08436135734310657,
+      "RET_252": 0.004793479230964293,
+      "RS_20": 0.01979324496155832,
+      "RS_40": 0.023037626934066635,
+      "RS_60": -0.010655888759497079,
+      "RS_120": 0.057497840872544836,
+      "DIST_SMA20": -0.019872319020074247,
+      "DIST_SMA50": -0.020678951018933023,
+      "DIST_SMA100": -0.011954449291832203,
+      "DIST_SMA200": -0.018366456960167254,
+      "DIST_HIGH_20": -0.032658859559896114,
+      "DIST_HIGH_50": -0.05414784779106052,
+      "DIST_HIGH_100": -0.05414784779106052,
+      "DIST_HIGH_252": -0.07438860374761602,
+      "BREAKOUT_20": -0.032658859559896114,
+      "BREAKOUT_50": -0.05414784779106052,
+      "RSI14": 39.027092508426826,
+      "VOLUME_RATIO_20": 2.9228624049752607
+    },
+    {
+      "Rank": 14,
+      "ETF": "OILIETF",
+      "Category": "Indian Sector - Oil & Gas",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 11.020000457763672,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.3,
+      "Predicted_Median_Days": 10.5,
+      "Predicted_Expected_Days_20": 17.35,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": -0.0036166329417204324,
+      "RET_10": -0.019572893045762596,
+      "RET_20": -0.026501700101433157,
+      "RET_40": -0.019572893045762596,
+      "RET_60": -0.019572893045762596,
+      "RET_120": 0.010082549210819192,
+      "RET_252": -0.0383943786141947,
+      "RS_20": 0.02154815833473034,
+      "RS_40": 0.024362369122008953,
+      "RS_60": 0.013406378210946368,
+      "RS_120": 0.0004405285999122821,
+      "DIST_SMA20": -0.014972034518517585,
+      "DIST_SMA50": -0.024364294914652418,
+      "DIST_SMA100": -0.028047233623294865,
+      "DIST_SMA200": -0.04820303189103736,
+      "DIST_HIGH_20": -0.030782711637485694,
+      "DIST_HIGH_50": -0.04257165607074587,
+      "DIST_HIGH_100": -0.07160905105226756,
+      "DIST_HIGH_252": -0.12051071886571052,
+      "BREAKOUT_20": -0.030782711637485694,
+      "BREAKOUT_50": -0.04257165607074587,
+      "RSI14": 38.19095461016716,
+      "VOLUME_RATIO_20": 0.2847760926860244
+    },
+    {
+      "Rank": 15,
+      "ETF": "HNGSNGBEES",
+      "Category": "International - Hang Seng",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 460.0199890136719,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.125,
+      "Predicted_Median_Days": 7.0,
+      "Predicted_Expected_Days_20": 18.7,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": -0.009474235146731402,
+      "RET_10": -0.013531185513020683,
+      "RET_20": -0.03328709457717516,
+      "RET_40": -0.06343907351022238,
+      "RET_60": -0.023664545909759194,
+      "RET_120": -0.09167740561605375,
+      "RET_252": -0.1255536666051369,
+      "RS_20": 0.014427850850894819,
+      "RS_40": -0.02146955884711954,
+      "RS_60": 0.009177091729179576,
+      "RS_120": -0.10034804860780244,
+      "DIST_SMA20": -0.014102031670823578,
+      "DIST_SMA50": -0.03652422040459591,
+      "DIST_SMA100": -0.061387508584622386,
+      "DIST_SMA200": -0.08841596897307258,
+      "DIST_HIGH_20": -0.0278734656486187,
+      "DIST_HIGH_50": -0.07550394421254936,
+      "DIST_HIGH_100": -0.1726854053809599,
+      "DIST_HIGH_252": -0.18773180916087706,
+      "BREAKOUT_20": -0.03328709457717516,
+      "BREAKOUT_50": -0.07550394421254936,
+      "RSI14": 28.87592352521075,
+      "VOLUME_RATIO_20": 1.560681462753093
+    },
+    {
+      "Rank": 16,
+      "ETF": "NIFTYBEES",
+      "Category": "Indian Broad Market - Nifty 50",
+      "Signal_Date": "2026-09-24T00:00:00",
+      "Current_Close": 263.989990234375,
+      "Method": "NEAREST_HISTORICAL_ANALOG",
+      "Matched_Rules": 0,
+      "Evidence": 40,
+      "Predicted_Hit_Rate": 0.25,
+      "Predicted_Median_Days": 18.5,
+      "Predicted_Expected_Days_20": 19.0,
+      "Best_Matching_Rule": "",
+      "Rationale": "No validated ETF-specific or global rule matched. Estimate uses 40 nearest historical same-ETF analog(s) before 2026-09-24. This is a fallback estimate, not OOS rule evidence.",
+      "RET_5": -0.0038864946871752792,
+      "RET_10": -0.015513719025909367,
+      "RET_20": -0.04703631252636353,
+      "RET_40": -0.04289035159054977,
+      "RET_60": -0.03254298765607733,
+      "RET_120": 0.009637774895425943,
+      "RET_252": -0.0766352015734646,
+      "RS_20": 0.0,
+      "RS_40": 0.0,
+      "RS_60": 0.0,
+      "RS_120": 0.0,
+      "DIST_SMA20": -0.020336245117479113,
+      "DIST_SMA50": -0.03577346108287405,
+      "DIST_SMA100": -0.029629789210417146,
+      "DIST_SMA200": -0.04669771680829926,
+      "DIST_HIGH_20": -0.04261260758736041,
+      "DIST_HIGH_50": -0.05916107601899556,
+      "DIST_HIGH_100": -0.05916107601899556,
+      "DIST_HIGH_252": -0.1127877631839943,
+      "BREAKOUT_20": -0.04703631252636353,
+      "BREAKOUT_50": -0.05916107601899556,
+      "RSI14": 28.81370978667887,
+      "VOLUME_RATIO_20": 1.5334515176736763
+    }
+  ]
+}
