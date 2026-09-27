@@ -1901,6 +1901,7 @@ def calculate_market_research_score(
 _DALAL_CLIENT = None
 _BSE_SESSION = None
 _BSE_LOOKUP_CACHE: dict[str, list[dict]] = {}
+_BSE_SECURITY_MASTER_CACHE: Optional[list[dict]] = None
 _DALAL_FUNDAMENTALS_CACHE: dict[str, dict] = {}
 _DALAL_META_CACHE: dict[str, dict] = {}
 _YAHOO_FUNDAMENTAL_CACHE: dict[str, dict] = {}
@@ -1959,8 +1960,15 @@ def get_bse_session() -> requests.Session:
                     "Chrome/142.0 Safari/537.36"
                 ),
                 "Accept": "application/json, text/plain, */*",
-                "Referer": "https://www.bseindia.com/",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "Referer": "https://www.bseindia.com/corporates/ann.html",
                 "Origin": "https://www.bseindia.com",
+                "Sec-Fetch-Site": "same-site",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Dest": "empty",
             }
         )
 
@@ -2100,11 +2108,106 @@ def parse_bse_lookup_candidates(
     return candidates
 
 
+def _extract_bse_security_master_rows(payload) -> list[dict]:
+    """Extract BSE security rows from ListofScripData responses."""
+    if isinstance(payload, dict):
+        for key in ("Table", "data", "Data", "results", "Result"):
+            value = payload.get(key)
+            if isinstance(value, list):
+                return [row for row in value if isinstance(row, dict)]
+        rows = []
+        for value in payload.values():
+            rows.extend(_extract_bse_security_master_rows(value))
+        return rows
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    return []
+
+
+def _security_master_candidate(row: dict) -> Optional[dict]:
+    """Convert a BSE security-master row to the internal candidate shape."""
+    code = None
+    for key in ("SCRIP_CD", "scripcode", "ScripCode", "Scrip_Code", "SecurityId"):
+        value = row.get(key)
+        if value not in (None, ""):
+            code = str(value).strip()
+            break
+
+    symbol = None
+    for key in (
+        "scrip_id",
+        "Scrip_Id",
+        "ScripID",
+        "SecuritySymbol",
+        "Symbol",
+        "SecurityName",
+    ):
+        value = row.get(key)
+        if value not in (None, ""):
+            symbol = str(value).strip()
+            break
+
+    company_name = None
+    for key in (
+        "Scrip_Name",
+        "ScripName",
+        "CompanyName",
+        "Company_Name",
+        "SecurityName",
+    ):
+        value = row.get(key)
+        if value not in (None, ""):
+            company_name = str(value).strip()
+            break
+
+    if not code or not symbol:
+        return None
+
+    return {
+        "bse_code": code,
+        "company_name": company_name or symbol,
+        "security_symbol": symbol,
+    }
+
+
+def lookup_bse_security_master_candidates(search_symbol: str) -> list[dict]:
+    """Fallback mapping through BSE's official security-master endpoint."""
+    global _BSE_SECURITY_MASTER_CACHE
+
+    if _BSE_SECURITY_MASTER_CACHE is None:
+        session = get_bse_session()
+        url = (
+            "https://api.bseindia.com/"
+            "BseIndiaAPI/api/ListofScripData/w"
+        )
+        response = session.get(
+            url,
+            params={
+                "segment": "Equity",
+                "status": "Active",
+            },
+            timeout=BSE_LOOKUP_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        rows = _extract_bse_security_master_rows(response.json())
+        _BSE_SECURITY_MASTER_CACHE = []
+        for row in rows:
+            candidate = _security_master_candidate(row)
+            if candidate:
+                _BSE_SECURITY_MASTER_CACHE.append(candidate)
+
+    target = normalize_security_token(search_symbol)
+    return [
+        row
+        for row in (_BSE_SECURITY_MASTER_CACHE or [])
+        if normalize_security_token(row.get("security_symbol")) == target
+    ]
+
+
 def lookup_bse_candidates(
     symbol: str,
 ) -> list[dict]:
-    """Search BSE for all candidate securities for an NSE symbol."""
-
+    """Search BSE for candidates, with a security-master fallback for 403."""
     search_symbol = normalize_bse_search_symbol(symbol)
 
     if not search_symbol:
@@ -2117,17 +2220,12 @@ def lookup_bse_candidates(
         "https://api.bseindia.com/"
         "BseIndiaAPI/api/PeerSmartSearch/w"
     )
-
     session = get_bse_session()
     stage_start = time.perf_counter()
+    last_error = None
 
-    for attempt in range(
-        1,
-        DALAL_RETRY_COUNT + 1,
-    ):
-
+    for attempt in range(1, DALAL_RETRY_COUNT + 1):
         try:
-
             response = session.get(
                 url,
                 params={
@@ -2136,50 +2234,53 @@ def lookup_bse_candidates(
                 },
                 timeout=BSE_LOOKUP_TIMEOUT_SECONDS,
             )
-
             response.raise_for_status()
-
             try:
                 payload = response.json()
-
             except ValueError:
                 payload = response.text
 
-            candidates = parse_bse_lookup_candidates(
-                payload
-            )
-
+            candidates = parse_bse_lookup_candidates(payload)
             _BSE_LOOKUP_CACHE[search_symbol] = candidates
-
             add_runtime_measurement(
                 "BSE lookup",
                 time.perf_counter() - stage_start,
             )
-
             return candidates
 
+        except requests.HTTPError as error:
+            last_error = error
+            if getattr(error.response, "status_code", None) == 403:
+                try:
+                    candidates = lookup_bse_security_master_candidates(search_symbol)
+                    _BSE_LOOKUP_CACHE[search_symbol] = candidates
+                    add_runtime_measurement(
+                        "BSE lookup",
+                        time.perf_counter() - stage_start,
+                    )
+                    return candidates
+                except Exception as fallback_error:
+                    last_error = fallback_error
+                    break
+
+            if attempt < DALAL_RETRY_COUNT:
+                time.sleep(DALAL_RETRY_SLEEP_SECONDS * attempt)
+                continue
+            break
+
         except Exception as error:
+            last_error = error
+            if attempt < DALAL_RETRY_COUNT:
+                time.sleep(DALAL_RETRY_SLEEP_SECONDS * attempt)
+                continue
+            break
 
-            if attempt >= DALAL_RETRY_COUNT:
-
-                print(
-                    f"WARNING: BSE lookup failed for "
-                    f"{symbol}: {error}"
-                )
-
-                _BSE_LOOKUP_CACHE[search_symbol] = []
-
-                add_runtime_measurement(
-                    "BSE lookup",
-                    time.perf_counter() - stage_start,
-                )
-
-                return []
-
-            time.sleep(
-                DALAL_RETRY_SLEEP_SECONDS * attempt
-            )
-
+    print(f"WARNING: BSE lookup failed for {symbol}: {last_error}")
+    _BSE_LOOKUP_CACHE[search_symbol] = []
+    add_runtime_measurement(
+        "BSE lookup",
+        time.perf_counter() - stage_start,
+    )
     return []
 
 
