@@ -1,5 +1,34 @@
 # MomentumPortfolioLab
 
+###The historical test from 2011-03 to 2026-09 produced:
+
+| Metric                 |      Result | Meaning                               |
+| ---------------------- | ----------: | ------------------------------------- |
+| CAGR                   |  **38.98%** | Historical annualized growth          |
+| Max drawdown           | **-26.54%** | Worst peak-to-trough decline          |
+| Volatility             |  **24.57%** | Annualized return variability         |
+| Sharpe                 |    **1.47** | Return relative to volatility         |
+| Positive months        |  **69.52%** | Months with positive portfolio return |
+| Final multiple         | **164.39×** | ₹10L → ~₹16.44Cr historically         |
+| 3Y rolling CAGR median |  **44.08%** | Typical 3-year annualized result      |
+| 5Y rolling CAGR median |  **44.91%** | Typical 5-year annualized result      |
+
+Your OOS period is:
+
+2021-03-31 → 2026-09-30
+
+It produced:
+
+CAGR       34.32%
+Max DD    -26.54%
+Sharpe      1.30
+
+This is useful because you're not looking only at the entire 2011–2026 period.
+
+The strategy still produced a strong historical result in the later period.
+
+But it is not truly independent of survivorship bias, as your own limitation #5 correctly states.
+
 ## Monthly Momentum Portfolio Decision Engine
 
 MomentumPortfolioLab is an OHLCV-based quantitative equity research and portfolio-decision engine for the current Nifty 500 universe.
