@@ -1,6 +1,7 @@
 # MomentumPortfolioLab
+Run main.py on every 1st weekend of the month to get the actionable insights accordingly.
 
-###The historical test from 2011-03 to 2026-09 produced:
+The historical test from 2011-03 to 2026-09 produced:
 
 | Metric                 |      Result | Meaning                               |
 | ---------------------- | ----------: | ------------------------------------- |
