@@ -4,14 +4,33 @@ __pycache__/
 .env
 universe.py
 results/
+
+# ============================================================
+# ETF5PercentLab production results - tracked
+# ============================================================
+
 !src/ETF5PercentLab/results/
 !src/ETF5PercentLab/results/**
+
 # ============================================================
 # MonthlyMomentumLab generated files
 # ============================================================
 
 src/MonthlyMomentumLab/cache/
 src/MonthlyMomentumLab/results/
+
+# ============================================================
+# SmallCapSIPLab
+# Keep generated research output ignored.
+# Explicitly allow only production files required by main.py.
+# ============================================================
+
+!src/SmallCapSIPLab/
+!src/SmallCapSIPLab/results/
+src/SmallCapSIPLab/results/*
+!src/SmallCapSIPLab/results/summary.json
+!src/SmallCapSIPLab/results/strategy_metrics.csv
+!src/SmallCapSIPLab/results/current_top5_trend.csv
 
 # Generated cache files
 *.pkl
