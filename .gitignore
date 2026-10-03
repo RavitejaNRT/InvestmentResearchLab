@@ -31,6 +31,7 @@ src/SmallCapSIPLab/results/*
 !src/SmallCapSIPLab/results/summary.json
 !src/SmallCapSIPLab/results/strategy_metrics.csv
 !src/SmallCapSIPLab/results/current_top5_trend.csv
+src/SmallCapSIPLab/cache/
 
 # Generated cache files
 *.pkl
